@@ -76,7 +76,7 @@ W = 800
 H = 800
 cmap = crear_colormap(paleta_nombre)
 img_preview, mask = julia_psy(W, H, c, zoom, iters, cmap, potencia_color, rotacion_color)
-st.image(img_preview, use_column_width=True, channels="RGB")
+st.image(img_preview, use_container_width=True, channels="RGB")
 
 st.sidebar.divider()
 if st.sidebar.button("Generar Export Alta"):
