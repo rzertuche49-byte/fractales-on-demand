@@ -3,8 +3,8 @@ import numpy as np
 from PIL import Image
 import io
 
-st.set_page_config(layout="wide", page_title="FRACTALES ON DEMAND V20")
-st.title("FRACTALES BAJO DEMANDA - V20 FINAL REFERENCIA")
+st.set_page_config(layout="wide", page_title="FRACTALES ON DEMAND V21")
+st.title("FRACTALES BAJO DEMANDA - V21 NEGRO PURO")
 
 with st.sidebar:
     st.header("Controles REFERENCIA")
@@ -17,11 +17,12 @@ with st.sidebar:
     vetas = st.slider("Num Vetass gordas", 0.5, 6.0, 1.4, 0.1)
     suavidad = st.slider("Suavidad flujo", 0.05, 2.0, 0.35, 0.05)
     rotacion = st.slider("Rotacion Tono", 0.0, 6.28, 5.8, 0.05)
+    brillo = st.slider("Brillo neon", 0.5, 2.0, 1.3, 0.1)
 
 c = complex(-0.74543, 0.11301) if 70 <= dia <= 80 else complex(0.7885*np.cos((dia/365)*2*np.pi*3), 0.7885*np.sin((dia/365)*2*np.pi*3))
-st.write(f"c = {c} | V20 paleta referencia original")
+st.write(f"c = {c} | V21 - SIN CAFE, negro puro como tu ref")
 
-def julia_final_ref(w, h, c, zoom, iters, vetas, suavidad, rotacion):
+def julia_final(w, h, c, zoom, iters, vetas, suavidad, rotacion, brillo):
     x_range = 3.0 / zoom
     y_range = 3.0 / zoom
     x = np.linspace(-x_range/2, x_range/2, w)
@@ -38,6 +39,7 @@ def julia_final_ref(w, h, c, zoom, iters, vetas, suavidad, rotacion):
         cnt[mask] += 1
         Z[mask] = Z[mask]**2 + c
         M[mask] = i
+
     with np.errstate(divide='ignore', invalid='ignore'):
         tia_avg = tia / (cnt + 1e-10)
         tia_s = np.log(tia_avg + 1.0)
@@ -45,33 +47,37 @@ def julia_final_ref(w, h, c, zoom, iters, vetas, suavidad, rotacion):
 
     t = tia_s * vetas + M * suavidad * 0.015 + rotacion
 
-    # PALETA NEON EXACTA DE TU FOTO 1: fucsia #ff006a, amarillo #ffcc00, turquesa #00ffea, morado #7a1fa2
     r = (0.5 + 0.5 * np.sin(t + 0.0)) * 255
     g = (0.5 + 0.5 * np.sin(t + 2.0)) * 255
     b = (0.5 + 0.5 * np.sin(t + 4.0)) * 255
-    # Boost neon
-    r = np.clip(r*1.5,0,255); g=np.clip(g*1.35,0,255); b=np.clip(b*1.5,0,255)
+
+    r = np.clip(r*1.5*brillo,0,255)
+    g = np.clip(g*1.35*brillo,0,255)
+    b = np.clip(b*1.5*brillo,0,255)
 
     img = np.stack([r,g,b], axis=-1).astype(np.uint8)
+
+    # FIX CAFE: fondo negro puro
     interior = M >= iters-5
-    img[interior]=[0,0,0]
-    # Fondo negro limpio
-    img[M < 2]=[0,0,0]
-    # Sombreado para relieve
-    shade = np.clip(M/80.0, 0, 1)
-    img = (img * (0.3 + 0.7*shade[:,:,None])).astype(np.uint8)
-    img[interior]=[0,0,0]
+    img[interior] = [0,0,0] # fractal negro como tu ref
+    # Todo lo que escapo muy rapido = negro puro, no cafe
+    img[M < 5] = [0,0,0]
+    # Degradado suave de negro a neon en borde
+    fade = np.clip((M - 5) / 15.0, 0, 1)[:,:,None]
+    img = (img * fade).astype(np.uint8)
+    img[interior] = [0,0,0]
+
     return img, interior
 
 W=900; H=900
-img_preview, interior = julia_final_ref(W, H, c, zoom, iters, vetas, suavidad, rotacion)
+img_preview, interior = julia_final(W, H, c, zoom, iters, vetas, suavidad, rotacion, brillo)
 st.image(img_preview, use_container_width=True, channels="RGB")
-st.success("CONFIG REFERENCIA ORIGINAL: ZOOM 0.75, VETAS 1.4, SUAVIDAD 0.35, ROTACION 5.8")
+st.success("V21 = sin cafe. Fondo negro puro + neón. Usa Brillo 1.3")
 
 st.sidebar.divider()
 if st.sidebar.button("Generar Export Alta"):
     with st.spinner(f"Generando {resolucion}x{resolucion}..."):
-        img_hi, interior_hi = julia_final_ref(resolucion, resolucion, c, zoom, iters, vetas, suavidad, rotacion)
+        img_hi, interior_hi = julia_final(resolucion, resolucion, c, zoom, iters, vetas, suavidad, rotacion, brillo)
         if fondo_transparente:
             alpha = np.ones((resolucion,resolucion),dtype=np.uint8)*255
             alpha[interior_hi]=0
@@ -80,4 +86,4 @@ if st.sidebar.button("Generar Export Alta"):
         else:
             img_pil=Image.fromarray(img_hi)
         buf=io.BytesIO(); img_pil.save(buf, format="PNG")
-        st.sidebar.download_button("Descargar PNG", buf.getvalue(), file_name=f"fractal_V20_FINAL_DIA{dia}.png", mime="image/png")
+        st.sidebar.download_button("Descargar PNG", buf.getvalue(), file_name=f"fractal_V21_FINAL_DIA{dia}.png", mime="image/png")
