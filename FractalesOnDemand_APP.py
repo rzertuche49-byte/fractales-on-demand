@@ -31,7 +31,7 @@ with st.sidebar:
 COLORES_GLOW = [c1,c2,c3,c4,c5,c6]
 
 # --- MOTOR ---
-@st.cache_data
+
 def julia_calc(c, size, iters, zoom):
     x = np.linspace(-zoom, zoom, size)
     y = np.linspace(-zoom, zoom, size)
