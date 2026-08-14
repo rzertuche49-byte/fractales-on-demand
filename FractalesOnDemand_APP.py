@@ -14,10 +14,10 @@ with st.sidebar:
     iters = st.slider("CALIDAD (iters)", 200, 2000, 800)
     resolucion = st.selectbox("Resolucion Exportar", [1000, 2000, 3000, 4000], index=0)
     fondo_transparente = st.checkbox("Fondo Transparente", value=False)
-    vetas = st.slider("Num Vetass gordas", 0.05, 2.0, 0.35, 0.05)
+    vetas = st.slider("Num Vetass gordas", 0.05, 2.0, 0.12, 0.05)
     suavidad = st.slider("Suavidad flujo", 0.02, 1.0, 0.25, 0.02)
-    rotacion = st.slider("Rotacion Tono", 0.0, 6.28, 5.80, 0.05)
-    brillo = st.slider("Brillo neon", 0.5, 2.5, 1.40, 0.05)
+    rotacion = st.slider("Rotacion Tono", 0.0, 6.28, 1.20, 0.05)
+    brillo = st.slider("Brillo neon", 0.5, 2.5, 1.80, 0.05)
 
 c = complex(-0.74543, 0.11301) if 70 <= dia <= 80 else complex(0.7885*np.cos((dia/365)*2*np.pi*3), 0.7885*np.sin((dia/365)*2*np.pi*3))
 
