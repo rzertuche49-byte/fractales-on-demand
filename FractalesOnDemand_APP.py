@@ -1,110 +1,94 @@
 import streamlit as st
 import numpy as np
+from PIL import Image
 import matplotlib.pyplot as plt
 from matplotlib.colors import LinearSegmentedColormap
-from PIL import Image
 import io
 
-st.set_page_config(page_title="Fractales On Demand V5", layout="wide")
-st.title("FRACTALES ON DEMAND - V5 LIMPIO")
+st.set_page_config(layout="wide", page_title="FRACTALES ON DEMAND V6")
+st.title("FRACTALES ON DEMAND - V6 PSYCHEDELIC")
 
-# --- CONTROLES ON DEMAND ---
 with st.sidebar:
     st.header("Controles")
-    DIA = st.slider("DIA (1-365)", 1, 365, 200)
-    ZOOM = st.slider("ZOOM", 0.8, 2.0, 1.15, 0.05)
-    ITERS = st.slider("CALIDAD (iters)", 300, 1500, 800, 100)
-    SIZE_PREVIEW = 800
-    SIZE_EXPORT = st.selectbox("Resolucion Export", [2000, 3000, 5000, 8000], index=1)
-    FONDO_TRANSP = st.checkbox("Fondo Transparente (para lona)", value=False)
-    COLOR_SOLIDO = st.color_picker("Color Interior", "#E93A8D")
+    dia = st.slider("DIA (1-365)", 1, 365, 200)
+    zoom = st.slider("ZOOM", 0.5, 3.0, 1.15, 0.05)
+    iters = st.slider("CALIDAD (iters)", 100, 1500, 800)
+    resolucion = st.selectbox("Resolucion Export", [1000, 2000, 3000, 4000], index=2)
+    st.divider()
+    paleta_nombre = st.selectbox("Estilo de Color", ["PSICODELICO (como tu foto)", "ARCOIRIS PURO", "FUEGO NEON", "OCEANO ACIDO", "ORIGINAL ROSA"])
+    color_interior = st.color_picker("Color Interior", "#000000")
+    fondo_transparente = st.checkbox("Fondo Transparente", value=True)
+    potencia_color = st.slider("Intensidad Color", 0.5, 5.0, 2.5)
+    rotacion_color = st.slider("Rotacion de Tono", 0.0, 1.0, 0.0)
 
-    st.markdown("---")
-    st.subheader("Paleta Fuego")
-    c1 = st.color_picker("Color 1", "#000000")
-    c2 = st.color_picker("Color 2", "#1A0A3A")
-    c3 = st.color_picker("Color 3", "#4A0C7A")
-    c4 = st.color_picker("Color 4", "#C80082")
-    c5 = st.color_picker("Color 5", "#FF3C00")
-    c6 = st.color_picker("Color 6", "#FF8A00")
+angle = (dia / 365.0) * 2 * np.pi * 3
+r = 0.7885
+c = complex(r * np.cos(angle), r * np.sin(angle))
+if dia == 200:
+    c = complex(-0.148469, 0.741099)
 
-COLORES_GLOW = [c1,c2,c3,c4,c5,c6]
+st.write(f"DIA {dia} | c={c} | Paleta={paleta_nombre}")
 
-# --- MOTOR ---
+def crear_colormap(nombre):
+    if nombre == "PSICODELICO (como tu foto)":
+        colors = ["#000000", "#2a0a4a", "#7a1fa2", "#ff00cc", "#ffcc00", "#00ffea", "#7a1fa2", "#ff00cc"]
+        return LinearSegmentedColormap.from_list("psy", colors, N=1024)
+    elif nombre == "ARCOIRIS PURO":
+        return plt.cm.hsv
+    elif nombre == "FUEGO NEON":
+        colors = ["#000000", "#ff0000", "#ff8800", "#ffff00", "#ffffff", "#ff00ff"]
+        return LinearSegmentedColormap.from_list("fuego", colors, N=1024)
+    elif nombre == "OCEANO ACIDO":
+        return plt.cm.turbo
+    else:
+        colors = ["#000000", "#1a0a1a", "#e63e8a"]
+        return LinearSegmentedColormap.from_list("rosa", colors, N=1024)
 
-def julia_calc(c, size, iters, zoom):
-    x = np.linspace(-zoom, zoom, size)
-    y = np.linspace(-zoom, zoom, size)
+def julia_psy(w, h, c, zoom, iters, cmap, potencia, rotacion):
+    x_range = 3.0 / zoom
+    y_range = 3.0 / zoom
+    x = np.linspace(-x_range/2, x_range/2, w)
+    y = np.linspace(-y_range/2, y_range/2, h)
     X, Y = np.meshgrid(x, y)
-    Z = X + 1j*Y
-    M = np.zeros(Z.shape, dtype=float)
+    Z = X + 1j * Y
+    M = np.zeros(Z.shape)
     for i in range(iters):
-        mask = np.abs(Z) < 4
-        if not np.any(mask): break
+        mask = np.abs(Z) <= 2
+        if not np.any(mask):
+            break
         Z[mask] = Z[mask]**2 + c
-        M[mask] = i - np.log2(np.log2(np.abs(Z[mask]) + 1.0001))
-    return M, Z, X, Y
+        M[mask] = i
+    with np.errstate(divide='ignore', invalid='ignore'):
+        smooth = M + 1 - np.log(np.log(np.abs(Z)+1e-10))/np.log(2)
+        smooth = np.nan_to_num(smooth, nan=0)
+    norm = (smooth / iters) * potencia + rotacion
+    norm = norm % 1.0
+    interior_mask = M >= iters-1
+    colored = cmap(norm)
+    img_array = (colored[:, :, :3] * 255).astype(np.uint8)
+    if not fondo_transparente:
+        hex_int = color_interior.lstrip('#')
+        rgb_int = tuple(int(hex_int[i:i+2], 16) for i in (0, 2, 4))
+        img_array[interior_mask] = rgb_int
+    return img_array, interior_mask
 
-# Mapa 6 petalos
-thetas = np.arange(1,366)/365 * 2*np.pi
-base_c = -0.12 + 0.75j
-MAPA = {d: complex(base_c.real + 0.03*np.cos(thetas[d-1]), base_c.imag + 0.03*np.sin(thetas[d-1])) for d in range(1,366)}
-c = MAPA[DIA]
+W = 800
+H = 800
+cmap = crear_colormap(paleta_nombre)
+img_preview, mask = julia_psy(W, H, c, zoom, iters, cmap, potencia_color, rotacion_color)
+st.image(img_preview, use_column_width=True, channels="RGB")
 
-st.write(f"Generando DIA {DIA} | c={c:.6f} | ZOOM={ZOOM}")
-
-# Preview rapido
-M, Z, X, Y = julia_calc(c, SIZE_PREVIEW, ITERS, ZOOM)
-
-interior = np.abs(Z) < 4
-escaped = ~interior
-final = np.zeros((M.shape[0], M.shape[1], 4))
-
-# Hex to RGB
-def hex2rgb(h):
-    h=h.lstrip('#')
-    return tuple(int(h[i:i+2], 16)/255 for i in (0,2,4))
-
-final[interior] = [*hex2rgb(COLOR_SOLIDO), 1]
-
-cmap_glow = LinearSegmentedColormap.from_list("glow", COLORES_GLOW, N=1024)
-glow_mask = escaped & (M < 50)
-if np.any(glow_mask):
-    norm = plt.Normalize(vmin=0, vmax=50)
-    final[glow_mask] = cmap_glow(norm(M[glow_mask]))
-
-if FONDO_TRANSP:
-    far = escaped & (M >= 50)
-    final[far] = [0,0,0,0]
-else:
-    bg = escaped & (M >= 50)
-    if np.any(bg):
-        final[bg] = [0.02, 0.01, 0.08, 1]
-
-sep = escaped & (M >= 18) & (M < 22)
-final[sep] = [0,0,0,1]
-
-# Mostrar
-st.image(final, caption=f"FRACTAL DIA {DIA}", use_container_width=True)
-
-# Exportar 8K
-if st.button(f"EXPORTAR EN {SIZE_EXPORT}x{SIZE_EXPORT} 8K"):
-    with st.spinner("Generando 8K... tarda 1-2 min"):
-        Mh, Zh, Xh, Yh = julia_calc(c, SIZE_EXPORT, ITERS, ZOOM)
-        interior_h = np.abs(Zh) < 4
-        escaped_h = ~interior_h
-        final_h = np.zeros((Mh.shape[0], Mh.shape[1], 4))
-        final_h[interior_h] = [*hex2rgb(COLOR_SOLIDO), 1]
-        glow_h = escaped_h & (Mh < 50)
-        if np.any(glow_h):
-            norm = plt.Normalize(vmin=0, vmax=50)
-            final_h[glow_h] = cmap_glow(norm(Mh[glow_h]))
-        if FONDO_TRANSP:
-            final_h[escaped_h & (Mh >= 50)] = [0,0,0,0]
+st.sidebar.divider()
+if st.sidebar.button("Generar Export Alta"):
+    with st.spinner(f"Generando {resolucion}x{resolucion}..."):
+        img_hi, mask_hi = julia_psy(resolucion, resolucion, c, zoom, iters, cmap, potencia_color, rotacion_color)
+        if fondo_transparente:
+            alpha = np.ones((resolucion, resolucion), dtype=np.uint8) * 255
+            alpha[mask_hi] = 0
+            img_pil = Image.fromarray(img_hi).convert("RGBA")
+            img_pil.putalpha(Image.fromarray(alpha))
         else:
-            final_h[escaped_h & (Mh >= 50)] = [0.02, 0.01, 0.08, 1]
-        final_h[escaped_h & (Mh >= 18) & (Mh < 22)] = [0,0,0,1]
-
+            img_pil = Image.fromarray(img_hi)
         buf = io.BytesIO()
-        plt.imsave(buf, final_h, dpi=600, format='png')
-        st.download_button("DESCARGAR PNG 8K", buf.getvalue(), file_name=f"FRACTAL_V5_DIA{DIA}_{SIZE_EXPORT}.png", mime="image/png")
+        img_pil.save(buf, format="PNG")
+        st.sidebar.download_button("Descargar PNG", buf.getvalue(), file_name=f"fractal_DIA{dia}_{paleta_nombre}.png", mime="image/png")
