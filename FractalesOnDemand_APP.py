@@ -2,81 +2,58 @@ import streamlit as st
 import numpy as np
 from PIL import Image
 import io
-
-st.set_page_config(layout="wide", page_title="FRACTALES ON DEMAND V27 LISO")
-st.title("FRACTALES BAJO DEMANDA - V27 SEDA LISA SIN MOSAICO")
-
+st.set_page_config(layout="wide", page_title="FRACTALES V31 FINAL")
+st.title("FRACTALES BAJO DEMANDA - V31 FINAL NEON REF")
 with st.sidebar:
-    st.header("Controles REFERENCIA")
-    modo = st.radio("Modo", ["Silueta Negra (tu ref original)", "Relleno Seda"], index=0)
+    paleta = st.selectbox("Paleta", ["3 Colores Neon (Fucsia/Turquesa/Amarillo) - REF ORIGINAL", "1 Color Neon (Fucsia actual)", "1 Color Turquesa", "Arcoiris Seda"], index=0)
     dia = st.slider("DIA (1-365)", 1, 365, 75)
     zoom = st.slider("ZOOM", 0.2, 4.0, 1.25, 0.05)
-    iters = st.slider("CALIDAD (iters)", 200, 2000, 800)
-    resolucion = st.selectbox("Resolucion Exportar", [1000, 2000, 3000, 4000], index=0)
-    fondo_transparente = st.checkbox("Fondo Transparente", value=False)
-    vetas = st.slider("Num Vetass gordas", 0.05, 2.0, 0.12, 0.05)
-    suavidad = st.slider("Suavidad flujo", 0.02, 1.0, 0.25, 0.02)
-    rotacion = st.slider("Rotacion Tono", 0.0, 6.28, 1.20, 0.05)
-    brillo = st.slider("Brillo neon", 0.5, 2.5, 1.80, 0.05)
+    iters = st.slider("CALIDAD", 200, 2000, 800)
+    resolucion = st.selectbox("Resolucion Exportar", [1000, 2000, 3000, 4000], index=2)
+    vetas = st.slider("Num Vetass gordas", 0.01, 0.2, 0.05, 0.005)
+    brillo = st.slider("Brillo neon", 0.5, 2.5, 1.8, 0.05)
+    rotacion = st.slider("Rotacion Tono", 0.0, 6.28, 1.2, 0.05)
 
 c = complex(-0.74543, 0.11301) if 70 <= dia <= 80 else complex(0.7885*np.cos((dia/365)*2*np.pi*3), 0.7885*np.sin((dia/365)*2*np.pi*3))
 
-def julia_v27(w, h, c, zoom, iters, vetas, suavidad, rotacion, brillo, modo):
-    x_range = 3.0 / zoom
-    y_range = 3.0 / zoom
-    x = np.linspace(-x_range/2, x_range/2, w)
-    y = np.linspace(-y_range/2, y_range/2, h)
-    X, Y = np.meshgrid(x, y)
-    Z = X + 1j * Y
-    M = np.zeros(Z.shape)
-    Zf = np.zeros(Z.shape, dtype=complex)
+def julia_final(w, h, c, zoom, iters, vetas, rotacion, brillo, paleta):
+    x=np.linspace(-3.0/zoom,3.0/zoom,w); y=np.linspace(-3.0/zoom,3.0/zoom,h)
+    X,Y=np.meshgrid(x,y); Z=X+1j*Y
+    M=np.zeros(Z.shape); Zabs=np.zeros(Z.shape)
     for i in range(iters):
-        mask = np.abs(Z) <= 10
+        mask=np.abs(Z)<=10
         if not np.any(mask): break
-        Z[mask] = Z[mask]**2 + c
-        M[mask] = i
-        Zf[mask] = Z[mask]
-    with np.errstate(divide='ignore', invalid='ignore'):
-        # SEDA LISA: solo log, NADA de Af = sin cuadritos
-        log_r = np.log(np.log(np.abs(Zf)+1)+1)
-        log_r = np.nan_to_num(log_r, nan=0, posinf=0, neginf=0)
-    # t liso que sigue la forma del fractal, no el angulo
-    t = log_r * (vetas * 12.0) + rotacion + log_r * suavidad * 2.0
-
-    r = (0.5 + 0.5 * np.sin(t + 0.0)) * 255
-    g = (0.5 + 0.5 * np.sin(t + 2.094)) * 255
-    b = (0.5 + 0.5 * np.sin(t + 4.188)) * 255
-    r = np.clip(r*1.5*brillo,0,255)
-    g = np.clip(g*1.35*brillo,0,255)
-    b = np.clip(b*1.5*brillo,0,255)
-    img = np.stack([r,g,b], axis=-1).astype(np.uint8)
-
-    if "Silueta" in modo:
-        interior_gordo = M > 25
-        exterior = M < 2
-        img[interior_gordo] = [0,0,0]
-        img[exterior] = [0,0,0]
-        fade = np.clip((M - 2) / 15.0, 0, 1)
-        fade = fade**0.5
-        img = (img.astype(float) * fade[:,:,None]).astype(np.uint8)
-        img[interior_gordo] = [0,0,0]
-        img[exterior] = [0,0,0]
-        return img, interior_gordo
+        Z[mask]=Z[mask]**2+c; M[mask]=i; Zabs[mask]=np.abs(Z[mask])
+    smooth = M + 1 - np.log(np.log(Zabs+1)+1)/np.log(2)
+    smooth = np.nan_to_num(smooth, nan=0)
+    t = (smooth * vetas * 6.28 + rotacion) % 6.28
+    r=np.zeros_like(t); g=np.zeros_like(t); b=np.zeros_like(t)
+    if "3 Colores" in paleta:
+        m1=t<2.09; m2=(t>=2.09)&(t<4.18); m3=t>=4.18
+        r[m1]=255; g[m1]=20; b[m1]=147
+        r[m2]=0; g[m2]=255; b[m2]=255
+        r[m3]=255; g[m3]=255; b[m3]=0
+    elif "Fucsia actual" in paleta:
+        r[:]=255; g[:]=20; b[:]=147
+        shade = 0.7 + 0.3*np.sin(t*2)
+        r=r*shade; g=g*shade*0.4; b=b*shade
+    elif "Turquesa" in paleta:
+        r[:]=0; g[:]=220; b[:]=255
     else:
-        interior_real = M >= iters-10
-        img[interior_real] = [0,0,0]
-        return img, interior_real
+        r=(0.5+0.5*np.sin(t))*255; g=(0.5+0.5*np.sin(t+2.094))*255; b=(0.5+0.5*np.sin(t+4.188))*255
+    img=np.stack([r,g,b],axis=-1).astype(np.uint8)
+    interior=M>25; exterior=M<2
+    img[interior]=[0,0,0]; img[exterior]=[0,0,0]
+    fade=np.clip((M-2)/20.0,0,1)
+    img=(img.astype(float)*fade[:,:,None]*brillo).astype(np.uint8)
+    img[interior]=[0,0,0]; img[exterior]=[0,0,0]
+    return img
 
 W=900; H=900
-img_preview, interior = julia_v27(W, H, c, zoom, iters, vetas, suavidad, rotacion, brillo, modo)
-st.image(img_preview, use_container_width=True, channels="RGB")
-st.success("V27 = sin Af = sin mosaico, solo log_r liso = vetas gordas neon")
-
+img = julia_final(W,H,c,zoom,iters,vetas,rotacion,brillo,paleta)
+st.image(img, use_container_width=True)
 with st.sidebar:
-    st.divider()
     if st.button("Generar Export Alta"):
-        with st.spinner(f"Generando {resolucion}x{resolucion}..."):
-            img_hi, interior_hi = julia_v27(resolucion, resolucion, c, zoom, iters, vetas, suavidad, rotacion, brillo, modo)
-            img_pil=Image.fromarray(img_hi)
-            buf=io.BytesIO(); img_pil.save(buf, format="PNG")
-            st.download_button("Descargar PNG", buf.getvalue(), file_name=f"fractal_V27_LISO_DIA{dia}.png", mime="image/png")
+        img_hi=julia_final(resolucion,resolucion,c,zoom,iters,vetas,rotacion,brillo,paleta)
+        buf=io.BytesIO(); Image.fromarray(img_hi).save(buf,format="PNG")
+        st.download_button("Descargar PNG",buf.getvalue(),file_name=f"fractal_V31_DIA{dia}.png",mime="image/png")
