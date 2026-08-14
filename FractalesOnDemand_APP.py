@@ -16,7 +16,6 @@ with st.sidebar:
     resolucion = st.selectbox("Resolucion Export", [1000, 2000, 3000, 4000], index=2)
     st.divider()
     paleta_nombre = st.selectbox("Estilo de Color", ["PSICODELICO (como tu foto)", "ARCOIRIS PURO", "FUEGO NEON", "OCEANO ACIDO", "ORIGINAL ROSA"])
-    color_interior = st.color_picker("Color Interior", "#000000")
     fondo_transparente = st.checkbox("Fondo Transparente", value=True)
     potencia_color = st.slider("Intensidad Color", 0.5, 5.0, 2.5)
     rotacion_color = st.slider("Rotacion de Tono", 0.0, 1.0, 0.0)
@@ -31,20 +30,20 @@ st.write(f"DIA {dia} | c={c} | Paleta={paleta_nombre}")
 
 def crear_colormap(nombre):
     if nombre == "PSICODELICO (como tu foto)":
-        colors = ["#000000", "#2a0a4a", "#7a1fa2", "#ff00cc", "#ffcc00", "#00ffea", "#7a1fa2", "#ff00cc"]
+        colors = ["#2a0a4a", "#7a1fa2", "#ff00cc", "#ffcc00", "#00ffea", "#7a1fa2", "#ff00cc", "#ff0066"]
         return LinearSegmentedColormap.from_list("psy", colors, N=1024)
     elif nombre == "ARCOIRIS PURO":
         return plt.cm.hsv
     elif nombre == "FUEGO NEON":
-        colors = ["#000000", "#ff0000", "#ff8800", "#ffff00", "#ffffff", "#ff00ff"]
+        colors = ["#ff0000", "#ff8800", "#ffff00", "#ffffff", "#ff00ff", "#ff0000"]
         return LinearSegmentedColormap.from_list("fuego", colors, N=1024)
     elif nombre == "OCEANO ACIDO":
         return plt.cm.turbo
     else:
-        colors = ["#000000", "#1a0a1a", "#e63e8a"]
+        colors = ["#ff0040", "#ff8a00", "#e63e8a", "#ff0040"]
         return LinearSegmentedColormap.from_list("rosa", colors, N=1024)
 
-def julia_psy(w, h, c, zoom, iters, cmap, potencia, rotacion):
+def julia_psy(w, h, c, zoom, iters, cmap, potencia, rotacion, transparente):
     x_range = 3.0 / zoom
     y_range = 3.0 / zoom
     x = np.linspace(-x_range/2, x_range/2, w)
@@ -61,27 +60,27 @@ def julia_psy(w, h, c, zoom, iters, cmap, potencia, rotacion):
     with np.errstate(divide='ignore', invalid='ignore'):
         smooth = M + 1 - np.log(np.log(np.abs(Z)+1e-10))/np.log(2)
         smooth = np.nan_to_num(smooth, nan=0)
+    # FIX: normalizacion que no empieza en negro
     norm = (smooth / iters) * potencia + rotacion
     norm = norm % 1.0
     interior_mask = M >= iters-1
     colored = cmap(norm)
     img_array = (colored[:, :, :3] * 255).astype(np.uint8)
-    if not fondo_transparente:
-        hex_int = color_interior.lstrip('#')
-        rgb_int = tuple(int(hex_int[i:i+2], 16) for i in (0, 2, 4))
-        img_array[interior_mask] = rgb_int
+    # Si quiere transparente, pon interior negro puro para que luego sea alpha 0
+    if transparente:
+        img_array[interior_mask] = [0,0,0]
     return img_array, interior_mask
 
 W = 800
 H = 800
 cmap = crear_colormap(paleta_nombre)
-img_preview, mask = julia_psy(W, H, c, zoom, iters, cmap, potencia_color, rotacion_color)
+img_preview, mask = julia_psy(W, H, c, zoom, iters, cmap, potencia_color, rotacion_color, fondo_transparente)
 st.image(img_preview, use_container_width=True, channels="RGB")
 
 st.sidebar.divider()
 if st.sidebar.button("Generar Export Alta"):
     with st.spinner(f"Generando {resolucion}x{resolucion}..."):
-        img_hi, mask_hi = julia_psy(resolucion, resolucion, c, zoom, iters, cmap, potencia_color, rotacion_color)
+        img_hi, mask_hi = julia_psy(resolucion, resolucion, c, zoom, iters, cmap, potencia_color, rotacion_color, fondo_transparente)
         if fondo_transparente:
             alpha = np.ones((resolucion, resolucion), dtype=np.uint8) * 255
             alpha[mask_hi] = 0
