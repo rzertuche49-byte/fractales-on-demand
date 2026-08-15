@@ -3,14 +3,14 @@ import numpy as np
 from PIL import Image
 import io
 import math
-st.set_page_config(layout="wide", page_title="V45 GORDO FINAL")
-st.title("FRACTALES BAJO DEMANDA - V45 GORDO FINAL - REF")
+st.set_page_config(layout="wide", page_title="V46 FINAL NEON")
+st.title("FRACTALES BAJO DEMANDA - V46 FINAL NEON")
 with st.sidebar:
     dia = st.slider("DIA", 1, 365, 258)
     zoom = st.slider("ZOOM", 0.2, 4.0, 1.45, 0.05)
     iters = st.slider("CALIDAD", 200, 2000, 1000)
     resolucion = st.selectbox("Resolucion", [1000, 2000, 3000, 4000], index=2)
-    grosor = st.slider("Grosor anillos", 0.1, 5.0, 1.80, 0.10)
+    grosor = st.slider("Grosor anillos", 0.1, 5.0, 1.00, 0.05)
 
 def dia_to_c(dia):
     t = dia / 365.0 * 2 * math.pi
@@ -18,7 +18,7 @@ def dia_to_c(dia):
     return complex(r*math.cos(t)*0.85-0.35, r*math.sin(t)*0.70)
 
 c = dia_to_c(dia)
-st.caption(f"DIA {dia} -> c = {c.real:.5f} + {c.imag:.5f}i | ORDEN: Negro->Fucsia->Turquesa->Amarillo")
+st.caption(f"DIA {dia} -> c = {c.real:.5f} + {c.imag:.5f}i | Negro -> Fucsia -> Turquesa -> Amarillo")
 
 def julia_final(w,h,c,zoom,iters,grosor):
     x=np.linspace(-3.0/zoom,3.0/zoom,w)
@@ -52,4 +52,4 @@ with st.sidebar:
         img_hi=julia_final(resolucion,resolucion,c,zoom,iters,grosor)
         buf=io.BytesIO()
         Image.fromarray(img_hi).save(buf,format="PNG")
-        st.download_button("Descargar PNG",buf.getvalue(),file_name=f"fractal_FINAL_DIA{dia}.png",mime="image/png")
+        st.download_button("Descargar PNG",buf.getvalue(),file_name=f"fractal_FINAL_DIA{dia}_G{grosor}.png",mime="image/png")
