@@ -3,23 +3,25 @@ import numpy as np
 from PIL import Image
 import io, math
 
-st.set_page_config(layout="wide", page_title="V70 BANDAS GRUESAS")
-st.title("FRACTALES BAJO DEMANDA - V70 BANDAS GRUESAS SIN MOIRÉ")
+st.set_page_config(layout="wide", page_title="V71 ZOOM EXTREMO")
+st.title("FRACTALES BAJO DEMANDA - V71 ZOOM EXTREMO 50X")
 st.latex(r"z_{n+1} = \left[ |z_n|^{\alpha} e^{i(\beta \arg z_n + \gamma \ln|z_n|) } \right]^p + c")
 
 with st.sidebar:
     dia = st.slider("DIA", 1, 365, 283)
-    zoom = st.slider("ZOOM", 0.2, 4.0, 1.20, 0.05)
-    center_x = st.slider("Centro X", -0.8, 1.2, 0.00, 0.02)
-    center_y = st.slider("Centro Y", -0.8, 0.8, 0.00, 0.02)
+    zoom = st.slider("ZOOM", 0.2, 50.0, 1.20, 0.05)
+    st.caption(f"Zoom actual: {zoom:.2f}x - antes max 4.0 ahora 50.0")
+    center_x = st.slider("Centro X", -1.5, 1.5, 0.00, 0.01)
+    center_y = st.slider("Centro Y", -1.5, 1.5, 0.00, 0.01)
     picos = st.slider("PICOS / CALIDAD", 0, 100, 100)
     alpha = st.slider("α grosor pico", 0.5, 2.0, 2.00, 0.05)
     beta = st.slider("β torsion", 0.5, 2.0, 1.00, 0.05)
     gamma = st.slider("γ espiral (bajalo si hay moiré)", -1.0, 1.0, 0.20, 0.05)
     p_pow = st.slider("p num picos", 2, 5, 5)
     mezcla = st.slider("Mezcla borde/contorno", 0.0, 1.0, 0.25, 0.05)
-    ciclos = st.slider("ciclos (NUM BANDAS) - BAJALO para gruesas", 0.05, 2.0, 0.25, 0.05)
-    resolucion = st.selectbox("Resolucion", [1000,2000,3000,4000], index=2)
+    ciclos = st.slider("ciclos (NUM BANDAS) - BAJALO para gruesas", 0.05, 5.0, 0.25, 0.05)
+    iters_extra = st.slider("Iteraciones extra para zoom alto", 0, 2000, 500, 100)
+    resolucion = st.selectbox("Resolucion", [1000,2000,3000,4000,6000], index=2)
 
 def dia_to_c(dia, picos_pct):
     t = dia/365*2*math.pi
@@ -28,10 +30,11 @@ def dia_to_c(dia, picos_pct):
     cy = 0.11 + r*math.sin(t*3)
     return complex(cx, cy), 1000, r
 
-c, iters, _ = dia_to_c(dia, picos)
-st.caption(f"V69 tenia moiré con γ=0.8 ciclos=0.7 ZOOM 4.0. V70 FIX: γ=0.2 mezcla=0.25 ciclos=0.25 = bandas gruesas sin rayitas. DIA {dia}")
+c, base_iters, _ = dia_to_c(dia, picos)
+iters = base_iters + iters_extra
+st.caption(f"DIA {dia} | ZOOM {zoom:.2f}x (nuevo max 50x) | iters {iters} | Para zoom >10 usa +500 iters extra")
 
-def julia_v70(w,h,c,zoom,cx,cy,iters,alpha,beta,gamma,p_pow,mezcla,ciclos):
+def julia_v71(w,h,c,zoom,cx,cy,iters,alpha,beta,gamma,p_pow,mezcla,ciclos):
     x = np.linspace(-1.5/zoom + cx, 1.5/zoom + cx, w)
     y = np.linspace(-1.0/zoom + cy, 1.0/zoom + cy, h)
     X,Y = np.meshgrid(x,y)
@@ -57,12 +60,8 @@ def julia_v70(w,h,c,zoom,cx,cy,iters,alpha,beta,gamma,p_pow,mezcla,ciclos):
         Z[mask] = Z_new_m
 
     valid = M < iters
-    # V70 FIX MOIRÉ: no usar log directo, usar solo arg + M suavizado
-    # fase = (1-mezcla)*arg + mezcla*M
-    # mezcla baja = sigue contorno, mezcla alta = radial
     fase = (1-mezcla)*(p_pow*arg_final[valid]) + mezcla*(M[valid]*0.5)
-    # suavizar fase para evitar rayitas del borde
-    fase = fase * 0.5 # reduce frecuencia
+    fase = fase * 0.5
 
     s = (fase * ciclos * 0.25) % 1.0
     t = s * 4.0
@@ -81,13 +80,13 @@ def julia_v70(w,h,c,zoom,cx,cy,iters,alpha,beta,gamma,p_pow,mezcla,ciclos):
     return img
 
 W=1200; H=700
-img=julia_v70(W,H,c,zoom,center_x,center_y,iters,alpha,beta,gamma,p_pow,mezcla,ciclos)
+img=julia_v71(W,H,c,zoom,center_x,center_y,iters,alpha,beta,gamma,p_pow,mezcla,ciclos)
 st.image(img,use_container_width=True,channels="RGB")
-st.success(f"V70: γ={gamma} (bajo para sin moiré) mezcla={mezcla} ciclos={ciclos} (BAJO=bandas gruesas). Tu V69 tenia ciclos 0.7 = delgado + moiré. Pon ciclos 0.25")
+st.success(f"ZOOM {zoom}x - Centro X {center_x} Y {center_y} | Usa Centro X/Y con paso 0.01 para navegar al borde. Zoom 10-50x ya es microscopio del borde")
 
 with st.sidebar:
     if st.button("Generar Export Alta"):
-        img_hi=julia_v70(resolucion,resolucion,c,zoom,center_x,center_y,iters,alpha,beta,gamma,p_pow,mezcla,ciclos)
+        img_hi=julia_v71(resolucion,resolucion,c,zoom,center_x,center_y,iters,alpha,beta,gamma,p_pow,mezcla,ciclos)
         buf=io.BytesIO()
         Image.fromarray(img_hi).save(buf,format="PNG")
-        st.download_button("Descargar PNG",buf.getvalue(),file_name=f"fractal_V70_Gruesas_DIA{dia}.png",mime="image/png")
+        st.download_button("Descargar PNG",buf.getvalue(),file_name=f"fractal_V71_ZOOM{zoom}_DIA{dia}.png",mime="image/png")
