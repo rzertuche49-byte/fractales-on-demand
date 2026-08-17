@@ -1,9 +1,9 @@
 import streamlit as st
 import numpy as np
-from PIL import Image
+from PIL import Image, ImageDraw, ImageFont
 import io, math
 
-st.set_page_config(layout="wide", page_title="V87")
+st.set_page_config(layout="wide", page_title="V88")
 
 def hex_to_rgb(h):
     h = h.lstrip('#')
@@ -52,11 +52,12 @@ with st.sidebar:
     st.divider()
     fondo_transparente = st.checkbox("Fondo transparente", value=False)
     umbral = st.slider("Limpieza fondo", 0.0, 5.0, 1.0)
+    st.divider()
+    incluir_etiqueta_en_imagen = st.checkbox("Incrustar nombre técnico en la imagen", value=True)
 
-# TITULO SOLO CON NOMBRE CLIENTE - SIN JULIA SET
 st.title(f"{nombre_cliente}")
 
-# Motor
+# Motor fractal
 t = dia/365*2*math.pi
 cx = -0.745 + 0.005*math.cos(t*3)
 cy = 0.11 + 0.005*math.sin(t*3)
@@ -83,27 +84,50 @@ for k in range(6):
     out[m,2] = (1-f[m])*palette[k,2] + f[m]*palette[nk,2]
 out = np.clip(out*brillo,0,255).astype(np.uint8)
 
+# Transparencia base
 magnitud = np.abs(Z)
 brillo_pixel = out.mean(axis=2)
 if fondo_transparente:
     alpha = np.where((magnitud < 4) & (brillo_pixel > (10 + umbral*10)), 255, 0).astype(np.uint8)
     out_rgba = np.dstack((out, alpha))
-    img_final = Image.fromarray(out_rgba, "RGBA")
-    st.image(out_rgba, use_container_width=True)
+    img_base = Image.fromarray(out_rgba, "RGBA")
 else:
-    img_final = Image.fromarray(out, "RGB")
-    st.image(out, use_container_width=True)
+    img_base = Image.fromarray(out, "RGB").convert("RGBA")
 
-# Etiqueta tecnica abajo SI se queda
+# --- NUEVO: INCRUSTAR ETIQUETA EN LA BASE DE LA IMAGEN ---
+if incluir_etiqueta_en_imagen:
+    W,H = img_base.size
+    etiqueta_h = 55
+    nueva = Image.new("RGBA", (W, H+etiqueta_h), (0,0,0,0) if fondo_transparente else (0,0,0,255))
+    nueva.paste(img_base, (0,0))
+    draw = ImageDraw.Draw(nueva)
+    # fondo etiqueta negro
+    draw.rectangle([(0,H),(W,H+etiqueta_h)], fill=(17,17,17,255))
+    # linea de color
+    try:
+        rgb_c1 = hex_to_rgb(c1)
+        draw.rectangle([(0,H),(8,H+etiqueta_h)], fill=tuple(rgb_c1)+(255,))
+    except: pass
+    texto = f"{nombre_cliente} | {firma} | JULIA SET - DENDRITE | C={cx:.4f}+{cy:.4f}i | {paleta_nombre}"
+    # fuente por defecto
+    draw.text((18, H+8), texto, fill=(255,255,255,255))
+    draw.text((18, H+28), f"Zn+1 = Zn^2 + C | DIA {dia} | Escape-Time Fractal", fill=(170,170,170,255))
+    img_final = nueva
+else:
+    img_final = img_base
+
+st.image(img_final, use_container_width=True)
+
+# Etiqueta visual en la web (igual que antes)
 st.markdown(f"""
 <div style="background:#111; padding:12px; border-radius:10px; border-left:5px solid {c1}">
 <b style="color:white;">{nombre_cliente} | {firma}</b><br>
 <span style="color:#AAA; font-family:monospace; font-size:12px;">
-Fórmula: Z(n+1)=Z(n)²+C | C={cx:.4f}+{cy:.4f}i | DIA {dia} | Paleta: {paleta_nombre}
+JULIA SET - DENDRITE | Fórmula: Z(n+1)=Z(n)²+C | C={cx:.4f}+{cy:.4f}i | DIA {dia} | Paleta: {paleta_nombre}
 </span>
 </div>
 """, unsafe_allow_html=True)
 
 buf = io.BytesIO()
 img_final.save(buf, format="PNG")
-st.sidebar.download_button("📥 Descargar PNG", buf.getvalue(), f"{nombre_cliente.replace(' ','_')}.png", "image/png", type="primary")
+st.sidebar.download_button("📥 Descargar PNG con etiqueta", buf.getvalue(), f"{nombre_cliente.replace(' ','_')}_JULIA.png", "image/png", type="primary")
