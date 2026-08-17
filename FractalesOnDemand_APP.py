@@ -3,7 +3,7 @@ import numpy as np
 from PIL import Image, ImageDraw, ImageFont
 import io, math
 
-st.set_page_config(layout="wide", page_title="Fractales On Demand V99.8 ETIQUETA UNICA")
+st.set_page_config(layout="wide", page_title="Fractales On Demand V99.9 ETIQUETA ABAJO")
 
 def hex_to_rgb(h):
     h=h.lstrip('#')
@@ -16,41 +16,48 @@ def get_font_mono(size):
     try: return ImageFont.truetype("DejaVuSansMono-Bold.ttf", size)
     except: return ImageFont.load_default()
 
-# ETIQUETA ESTILO CAPTURA - CAJA BLANCA REDONDEADA
-def dibujar_etiqueta_captura(img, texto1, texto2, escala=1.0):
-    draw = ImageDraw.Draw(img, "RGBA")
-    W,H = img.size
-    # tamaño caja proporcional
-    pad_x = int(32*escala)
-    pad_y = int(22*escala)
-    font1 = get_font_bold(int(34*escala))
-    font2 = get_font_mono(int(24*escala))
+# CREA IMAGEN CON ETIQUETA ABAJO (FUERA DEL FRACTAL)
+def crear_imagen_con_etiqueta_abajo(img_base, texto1, texto2, escala=1.0):
+    W,H = img_base.size
+    label_h = int(110*escala)
+    # nueva imagen mas alta con fondo blanco abajo
+    nueva_h = H + label_h
+    if img_base.mode == "RGBA":
+        nueva = Image.new("RGBA", (W, nueva_h), (255,255,255,255))
+        # si el base es transparente, primero ponemos el fondo del fractal arriba y blanco abajo
+        # pegamos el fractal arriba
+        if img_base.mode == "RGBA":
+            # para que no se vea feo si el fondo era transparente, dejamos transparente arriba? No, para etiqueta abajo mejor fondo blanco total abajo
+            base_rgb = Image.new("RGB", (W,H), (0,0,0))
+            base_rgb.paste(img_base, mask=img_base.split()[3])
+            # pero respetamos si era fondo color, usamos img_base directo
+            # simplificado: usamos img_base convertido a RGB para el area de arriba si es transparente lo ponemos negro
+            pass
+        nueva.paste(img_base, (0,0))
+    else:
+        nueva = Image.new("RGB", (W, nueva_h), (255,255,255))
 
-    # medir textos
-    try:
-        bbox1 = draw.textbbox((0,0), texto1, font=font1)
-        bbox2 = draw.textbbox((0,0), texto2, font=font2)
-        tw = max(bbox1[2]-bbox1[0], bbox2[2]-bbox2[0])
-        th = (bbox1[3]-bbox1[1]) + (bbox2[3]-bbox2[1]) + int(12*escala)
-    except:
-        tw = int(500*escala); th = int(60*escala)
+    # si el fondo era transparente y queremos etiqueta abajo, el area del fractal queda con su fondo, el area nueva es blanca
+    if img_base.mode == "RGBA":
+        # aseguramos que la parte de abajo sea blanca solida
+        draw = ImageDraw.Draw(nueva, "RGBA")
+        draw.rectangle([0,H,W,nueva_h], fill=(255,255,255,255))
+        # repintamos img_base arriba (por si tenia transparencia)
+        nueva.paste(img_base, (0,0), img_base)
+    else:
+        nueva.paste(img_base, (0,0))
 
-    # caja blanca abajo
-    box_w = W - int(20*escala)*2
-    box_h = th + pad_y*2
-    x0 = int(14*escala)
-    y0 = H - box_h - int(14*escala)
-    x1 = x0 + box_w
-    y1 = H - int(14*escala)
+    draw = ImageDraw.Draw(nueva)
+    # linea separadora sutil
+    draw.line([0,H,W,H], fill=(235,235,235), width=int(2*escala))
 
-    # fondo blanco redondeado
-    radius = int(18*escala)
-    draw.rounded_rectangle([x0,y0,x1,y1], radius=radius, fill=(255,255,255,255), outline=(230,230,230,255), width=int(1*escala))
+    font1 = get_font_bold(int(32*escala))
+    font2 = get_font_mono(int(22*escala))
 
-    # textos en negro
-    draw.text((x0+pad_x, y0+pad_y), texto1, fill=(0,0,0,255), font=font1)
-    draw.text((x0+pad_x, y0+pad_y+int(38*escala)), texto2, fill=(0,0,0,255), font=font2)
-    return img
+    pad_x = int(24*escala)
+    draw.text((pad_x, H+int(18*escala)), texto1, fill=(0,0,0,255), font=font1)
+    draw.text((pad_x, H+int(58*escala)), texto2, fill=(0,0,0,255), font=font2)
+    return nueva
 
 def render_block(W_chunk, H_chunk, X, Y, c_var, tipo, iter_base=60):
     if tipo == "MANDELBROT":
@@ -112,7 +119,7 @@ def render_block(W_chunk, H_chunk, X, Y, c_var, tipo, iter_base=60):
             for _ in range(iter_base): Z=Z*Z+c_var
         return Z
 
-def render_fractal_true(W, H, zoom, c_var, tipo_fractal, colores_rgb, tam, brillo_val, bg_mode, bg_rgb, umbral, texto1, texto2, incluir):
+def render_fractal_true(W, H, zoom, c_var, tipo_fractal, colores_rgb, tam, brillo_val, bg_mode, bg_rgb, umbral, texto1, texto2, incluir_etiqueta_abajo):
     out_full = np.zeros((H, W, 3), dtype=np.uint8)
     mask_full = np.zeros((H, W), dtype=bool)
     ys = np.linspace(-1.0/zoom, 1.0/zoom, H)
@@ -148,9 +155,9 @@ def render_fractal_true(W, H, zoom, c_var, tipo_fractal, colores_rgb, tam, brill
     else:
         img_true = Image.fromarray(out_full, "RGB").convert("RGBA")
 
-    if incluir:
+    if incluir_etiqueta_abajo:
         escala = W/1000
-        img_true = dibujar_etiqueta_captura(img_true, texto1, texto2, escala=escala)
+        img_true = crear_imagen_con_etiqueta_abajo(img_true, texto1, texto2, escala=escala)
     return img_true
 
 PALETAS = {
@@ -226,7 +233,8 @@ with st.sidebar:
     if fondo_mode == "Color de paleta":
         fondo_color_custom = st.color_picker("Elige color de fondo", base[0], key=f"bg_{paleta_nombre}")
     umbral = st.slider("Limpieza fondo", 0.0, 5.0, 1.0)
-    incluir = st.checkbox("Incrustar etiqueta en imagen (estilo captura)", True)
+    # CAMBIO DE NOMBRE SOLICITADO
+    presentar_etiqueta = st.checkbox("Presentar etiqueta debajo de la imagen", True)
     st.divider()
     calidad = st.slider("Calidad JPG", 80, 100, 95)
     render_real_8k = st.checkbox("Render 8K REAL para imprenta", value=True)
@@ -271,25 +279,32 @@ else:
 texto1=f"{nombre_cliente} {codigos}" if codigos.strip()!="" else nombre_cliente
 texto2=f"{tipo_fractal} | C={cx:.4f}+{cy:.4f}i | {FRACTALES[tipo_fractal]['formula']}"
 
-# APLICAR ETIQUETA UNICA ESTILO CAPTURA
-if incluir:
-    img_final = dibujar_etiqueta_captura(img_base.copy(), texto1, texto2, escala=1.0)
-else:
-    img_final=img_base
+# VISTA PREVIA: IMAGEN LIMPIA ARRIBA + ETIQUETA ABAJO SEPARADA
+st.image(img_base, width=1000)
 
-# SOLO IMAGEN, YA NO HAY SEGUNDA ETIQUETA
-st.image(img_final, width=1000)
+if presentar_etiqueta:
+    st.markdown(f"""
+    <div style="background:white;padding:18px 24px;border-radius:12px;border:1px solid #EAEAEA;margin-top:12px;">
+        <div style="color:black;font-weight:800;font-size:26px;letter-spacing:0.2px;">{texto1}</div>
+        <div style="color:black;font-family:monospace;font-size:20px;margin-top:8px;">{texto2}</div>
+    </div>
+    """, unsafe_allow_html=True)
+    img_export_preview = crear_imagen_con_etiqueta_abajo(img_base, texto1, texto2, escala=1.0)
+else:
+    img_export_preview = img_base
 
 colores_rgb = [hex_to_rgb(c) for c in colores_actuales]
 
 with st.sidebar:
-    buf=io.BytesIO(); img_final.save(buf, format="PNG")
-    st.download_button("PNG Standard 1000x800 (con etiqueta captura)", buf.getvalue(), f"{nombre_cliente}_STD_{fondo_mode}.png", "image/png", key="png_std")
+    buf=io.BytesIO()
+    img_export_preview.save(buf, format="PNG")
+    st.download_button("PNG Standard 1000x800", buf.getvalue(), f"{nombre_cliente}_STD_{fondo_mode}.png", "image/png", key="png_std")
+
     if render_real_8k:
         if st.button("Generar 8K REAL NITIDO (2 min)", key="gen8k"):
-            img_e = render_fractal_true(7680,6144, zoom, c_var, tipo_fractal, colores_rgb, tam, brillo, fondo_mode, bg_rgb, umbral, texto1, texto2, incluir)
+            img_e = render_fractal_true(7680,6144, zoom, c_var, tipo_fractal, colores_rgb, tam, brillo, fondo_mode, bg_rgb, umbral, texto1, texto2, presentar_etiqueta)
             buf=io.BytesIO(); img_e.save(buf, format="PNG")
             st.download_button("⬇️ PNG 8K REAL", buf.getvalue(), f"{nombre_cliente}_8K_REAL_{fondo_mode}.png", "image/png", key="png_8k_real")
             buf2=io.BytesIO(); img_e.convert("RGB").save(buf2, format="PDF", resolution=300.0)
             st.download_button("⬇️ PDF 8K REAL 300dpi", buf2.getvalue(), f"{nombre_cliente}_8K_REAL_{fondo_mode}.pdf", "application/pdf", key="pdf_8k_real")
-            
+            st.success("Exportado con etiqueta abajo, sin pisar el fractal")
