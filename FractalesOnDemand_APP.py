@@ -1,18 +1,16 @@
 import streamlit as st
 import numpy as np
 from PIL import Image, ImageDraw, ImageFont
-import io, math, os
+import io, math
 
-st.set_page_config(layout="wide", page_title="V96")
+st.set_page_config(layout="wide", page_title="V96.1")
 
 def hex_to_rgb(h):
     h = h.lstrip('#')
     return [int(h[0:2],16), int(h[2:4],16), int(h[4:6],16)]
 
 def get_font(size):
-    # Intenta cargar una fuente grande, si no usa la default
     try:
-        # DejaVu viene en casi todos los servers
         return ImageFont.truetype("DejaVuSans-Bold.ttf", size)
     except:
         try:
@@ -65,8 +63,12 @@ with st.sidebar:
     paleta_nombre = st.selectbox("PALETA", list(PALETAS.keys()), index=0)
     base = PALETAS[paleta_nombre]
     st.write("**EDITA 6 COLORES**")
-    c1 = st.color_picker("C1", base[0]); c2 = st.color_picker("C2", base[1]); c3 = st.color_picker("C3", base[2])
-    c4 = st.color_picker("C4", base[3]); c5 = st.color_picker("C5", base[4]); c6 = st.color_picker("C6", base[5])
+    c1 = st.color_picker("C1", base[0])
+    c2 = st.color_picker("C2", base[1])
+    c3 = st.color_picker("C3", base[2])
+    c4 = st.color_picker("C4", base[3])
+    c5 = st.color_picker("C5", base[4])
+    c6 = st.color_picker("C6", base[5])
     colores_actuales = [c1,c2,c3,c4,c5,c6]
     st.write("---")
     tam = st.slider("Tamano mancha", 0.1, 3.0, 1.8)
@@ -76,12 +78,17 @@ with st.sidebar:
     umbral = st.slider("Limpieza fondo", 0.0, 5.0, 1.0)
     incluir_etiqueta_en_imagen = st.checkbox("Incrustar etiqueta en imagen", value=True)
 
-st.title(f"{nombre_cliente}")
+st.title(nombre_cliente)
 
 t = dia/365*2*math.pi
 base_c = FRACTALES[tipo_fractal]["c"]
 es_fijo = tipo_fractal in ("MANDELBROT", "TRICORN", "NEWTON")
-cx, cy = (base_c.real, base_c.imag) if es_fijo else (base_c.real + 0.005*math.cos(t*3), base_c.imag + 0.005*math.sin(t*3))
+if es_fijo:
+    cx = base_c.real
+    cy = base_c.imag
+else:
+    cx = base_c.real + 0.005*math.cos(t*3)
+    cy = base_c.imag + 0.005*math.sin(t*3)
 c_var = complex(cx, cy)
 
 x = np.linspace(-1.5/zoom, 1.5/zoom, 1000)
@@ -89,47 +96,102 @@ y = np.linspace(-1.0/zoom, 1.0/zoom, 800)
 X,Y = np.meshgrid(x,y)
 
 if tipo_fractal == "MANDELBROT":
-    C = (X-0.5) + 1j*Y; Z = np.zeros_like(C)
-    for _ in range(80): Z = Z*Z + C
+    C = (X-0.5) + 1j*Y
+    Z = np.zeros_like(C)
+    for _ in range(80):
+        Z = Z*Z + C
 elif tipo_fractal == "TRICORN":
-    C = (X-0.5) + 1j*Y; Z = np.zeros_like(C)
-    for _ in range(80): Z = np.conj(Z)**2 + C
+    C = (X-0.5) + 1j*Y
+    Z = np.zeros_like(C)
+    for _ in range(80):
+        Z = np.conj(Z)**2 + C
 elif tipo_fractal == "NEWTON":
     Z = X + 1j*Y
     for _ in range(30):
-        Z2 = Z*Z; Z3 = Z2*Z
-        denom = np.where(np.abs(3*Z2)<1e-6, 1e-6, 3*Z2)
+        Z2 = Z*Z
+        Z3 = Z2*Z
+        denom = 3*Z2
+        denom = np.where(np.abs(denom)<1e-6, 1e-6, denom)
         Z = Z - (Z3-1)/denom
 else:
     Z = X+1j*Y
     if tipo_fractal == "BURNING SHIP JULIA":
-        for _ in range(80): Z = (np.abs(Z.real) + 1j*np.abs(Z.imag))**2 + c_var
+        for _ in range(80):
+            Z = (np.abs(Z.real) + 1j*np.abs(Z.imag))**2 + c_var
     else:
-        for _ in range(80): Z = Z*Z + c_var
+        for _ in range(80):
+            Z = Z*Z + c_var
 
-s = (np.angle(Z) + np.pi) / (2*np.pi) if tipo_fractal=="NEWTON" else (np.angle(Z)*0.22 + np.log(np.abs(Z)+1)*tam)*0.375 % 1.0
+if tipo_fractal == "NEWTON":
+    s = (np.angle(Z) + np.pi) / (2*np.pi)
+else:
+    fase = np.angle(Z)*0.22 + np.log(np.abs(Z)+1)*tam
+    s = (fase*0.375) % 1.0
 
 palette = np.array([hex_to_rgb(c) for c in colores_actuales], float)
-pos = s*6.0; i0 = np.floor(pos).astype(int) % 6
-f = pos - np.floor(pos); f = 0.5*(1-np.cos(f*np.pi))
+pos = s*6.0
+i0 = np.floor(pos).astype(int) % 6
+f = pos - np.floor(pos)
+f = 0.5*(1-np.cos(f*np.pi))
 out = np.zeros((800,1000,3), float)
 for k in range(6):
-    m = i0==k; nk = (k+1)%6
+    m = i0==k
+    nk = (k+1)%6
     out[m,0] = (1-f[m])*palette[k,0] + f[m]*palette[nk,0]
     out[m,1] = (1-f[m])*palette[k,1] + f[m]*palette[nk,1]
     out[m,2] = (1-f[m])*palette[k,2] + f[m]*palette[nk,2]
 out = np.clip(out*brillo,0,255).astype(np.uint8)
 
-magnitud = np.abs(Z); brillo_pixel = out.mean(axis=2)
+magnitud = np.abs(Z)
+brillo_pixel = out.mean(axis=2)
+
+# --- CORRECCION DEL ERROR DE SINTAXIS ---
 if fondo_transparente:
-    alpha = np.where(brillo_pixel > (10 + umbral*10), 255, 0).astype(np.uint8) if tipo_fractal=="NEWTON" else np.where((magnitud < 4) & (brillo_pixel > (10 + umbral*10)), 255, 0).astype(np.uint8)
+    if tipo_fractal == "NEWTON":
+        alpha = np.where(brillo_pixel > (10 + umbral*10), 255, 0).astype(np.uint8)
+    else:
+        alpha = np.where((magnitud < 4) & (brillo_pixel > (10 + umbral*10)), 255, 0).astype(np.uint8)
     img_base = Image.fromarray(np.dstack((out, alpha)), "RGBA")
 else:
     img_base = Image.fromarray(out, "RGB").convert("RGBA")
 
 formula_txt = FRACTALES[tipo_fractal]["formula"]
 
+# Orden que pediste
 if codigos.strip()!= "":
     texto_linea1 = f"{nombre_cliente} | {codigos}"
 else:
-    texto_linea1 =
+    texto_linea1 = f"{nombre_cliente}"
+texto_linea2 = f"{tipo_fractal} | C={cx:.4f}+{cy:.4f}i | {formula_txt}"
+
+# Etiqueta 1 dentro de la imagen - SIN SOMBRA Y MAS GRANDE
+if incluir_etiqueta_en_imagen:
+    img_final = img_base.copy()
+    W,H = img_final.size
+    draw = ImageDraw.Draw(img_final)
+    muestra_inf = out[H-80:H, :].mean() if H>=80 else out.mean()
+    es_oscuro = muestra_inf < 100
+    color_texto = (255,255,255,255) if es_oscuro else (0,0,0,255)
+    font1 = get_font(32)
+    font2 = get_font(24)
+    x0 = 22
+    y1 = H - 68
+    y2 = H - 30
+    draw.text((x0, y1), texto_linea1, fill=color_texto, font=font1)
+    draw.text((x0, y2), texto_linea2, fill=color_texto, font=font2)
+else:
+    img_final = img_base
+
+st.image(img_final, use_container_width=True)
+
+# Etiqueta 2 siempre blanca con texto negro
+st.markdown(f"""
+<div style="background:white; padding:16px 18px; border-radius:10px; border:1px solid #DDD;">
+<b style="color:black; font-size:20px; font-family:Arial;">{texto_linea1}</b><br>
+<span style="color:black; font-family:monospace; font-size:16px;">{texto_linea2}</span>
+</div>
+""", unsafe_allow_html=True)
+
+buf = io.BytesIO()
+img_final.save(buf, format="PNG")
+st.sidebar.download_button("📥 Descargar PNG", buf.getvalue(), f"{nombre_cliente.replace(' ','_')}_{tipo_fractal}.png", "image/png", type="primary")
