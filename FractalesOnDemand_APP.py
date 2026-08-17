@@ -3,7 +3,7 @@ import numpy as np
 from PIL import Image, ImageDraw
 import io, math
 
-st.set_page_config(layout="wide", page_title="V91")
+st.set_page_config(layout="wide", page_title="V92")
 
 def hex_to_rgb(h):
     h = h.lstrip('#')
@@ -45,7 +45,7 @@ FRACTALES = {
 }
 
 with st.sidebar:
-    nombre_cliente = st.text_input("Nombre del cliente / proyecto", "FRACTALES ON DEMAND")
+    nombre_cliente = st.text_input("Nombre del cliente / proyecto", "ROBERTO ZERTUCHE")
     firma = st.text_input("Firma", "© 2026")
     st.divider()
     tipo_fractal = st.selectbox("TIPO DE FRACTAL", list(FRACTALES.keys()), index=0)
@@ -71,20 +71,15 @@ with st.sidebar:
 
 st.title(f"{nombre_cliente}")
 
-# Motor - CORREGIDO SIN ERROR DE SINTAXIS
 t = dia/365*2*math.pi
 base_c = FRACTALES[tipo_fractal]["c"]
-
-# Para Mandelbrot, Tricorn y Newton no hay variacion por dia
 es_fijo = tipo_fractal in ("MANDELBROT", "TRICORN", "NEWTON")
-
 if es_fijo:
     cx = base_c.real
     cy = base_c.imag
 else:
     cx = base_c.real + 0.005*math.cos(t*3)
     cy = base_c.imag + 0.005*math.sin(t*3)
-
 c_var = complex(cx, cy)
 
 x = np.linspace(-1.5/zoom, 1.5/zoom, 1000)
@@ -94,33 +89,26 @@ X,Y = np.meshgrid(x,y)
 if tipo_fractal == "MANDELBROT":
     C = (X-0.5) + 1j*Y
     Z = np.zeros_like(C)
-    for _ in range(80):
-        Z = Z*Z + C
+    for _ in range(80): Z = Z*Z + C
 elif tipo_fractal == "TRICORN":
     C = (X-0.5) + 1j*Y
     Z = np.zeros_like(C)
-    for _ in range(80):
-        Z = np.conj(Z)**2 + C
+    for _ in range(80): Z = np.conj(Z)**2 + C
 elif tipo_fractal == "NEWTON":
     Z = X + 1j*Y
     for _ in range(30):
-        Z2 = Z*Z
-        Z3 = Z2*Z
-        denom = 3*Z2
-        denom = np.where(np.abs(denom)<1e-6, 1e-6, denom)
+        Z2 = Z*Z; Z3 = Z2*Z
+        denom = np.where(np.abs(3*Z2)<1e-6, 1e-6, 3*Z2)
         Z = Z - (Z3-1)/denom
 else:
     Z = X+1j*Y
     if tipo_fractal == "BURNING SHIP JULIA":
-        for _ in range(80):
-            Z = (np.abs(Z.real) + 1j*np.abs(Z.imag))**2 + c_var
+        for _ in range(80): Z = (np.abs(Z.real) + 1j*np.abs(Z.imag))**2 + c_var
     else:
-        for _ in range(80):
-            Z = Z*Z + c_var
+        for _ in range(80): Z = Z*Z + c_var
 
 if tipo_fractal == "NEWTON":
-    ang = np.angle(Z)
-    s = (ang + np.pi) / (2*np.pi)
+    s = (np.angle(Z) + np.pi) / (2*np.pi)
 else:
     fase = np.angle(Z)*0.22 + np.log(np.abs(Z)+1)*tam
     s = (fase*0.375) % 1.0
@@ -132,8 +120,7 @@ f = pos - np.floor(pos)
 f = 0.5*(1-np.cos(f*np.pi))
 out = np.zeros((800,1000,3), float)
 for k in range(6):
-    m = i0==k
-    nk = (k+1)%6
+    m = i0==k; nk = (k+1)%6
     out[m,0] = (1-f[m])*palette[k,0] + f[m]*palette[nk,0]
     out[m,1] = (1-f[m])*palette[k,1] + f[m]*palette[nk,1]
     out[m,2] = (1-f[m])*palette[k,2] + f[m]*palette[nk,2]
@@ -142,38 +129,44 @@ out = np.clip(out*brillo,0,255).astype(np.uint8)
 magnitud = np.abs(Z)
 brillo_pixel = out.mean(axis=2)
 if fondo_transparente:
-    if tipo_fractal == "NEWTON":
-        alpha = np.where(brillo_pixel > (10 + umbral*10), 255, 0).astype(np.uint8)
-    else:
-        alpha = np.where((magnitud < 4) & (brillo_pixel > (10 + umbral*10)), 255, 0).astype(np.uint8)
+    alpha = np.where(brillo_pixel > (10 + umbral*10), 255, 0).astype(np.uint8) if tipo_fractal=="NEWTON" else np.where((magnitud < 4) & (brillo_pixel > (10 + umbral*10)), 255, 0).astype(np.uint8)
     img_base = Image.fromarray(np.dstack((out, alpha)), "RGBA")
 else:
     img_base = Image.fromarray(out, "RGB").convert("RGBA")
 
 formula_txt = FRACTALES[tipo_fractal]["formula"]
 
+# TEXTO LIMPIO SIN DIA Y SIN PALETA
+texto_linea1 = f"{nombre_cliente} | {tipo_fractal} | C={cx:.4f}+{cy:.4f}i"
+texto_linea2 = f"{formula_txt}"
+
 if incluir_etiqueta_en_imagen:
     W,H = img_base.size
-    etiqueta_h = 60
-    nueva = Image.new("RGBA", (W, H+etiqueta_h), (0,0,0,0) if fondo_transparente else (0,0,0,255))
+    etiqueta_h = 52
+    # Fondo blanco/transparente
+    if fondo_transparente:
+        nueva = Image.new("RGBA", (W, H+etiqueta_h), (255,255,255,0))
+        fondo_etiqueta = (255,255,255,230)
+    else:
+        nueva = Image.new("RGBA", (W, H+etiqueta_h), (255,255,255,255))
+        fondo_etiqueta = (255,255,255,255)
     nueva.paste(img_base, (0,0))
     draw = ImageDraw.Draw(nueva)
-    draw.rectangle([(0,H),(W,H+etiqueta_h)], fill=(17,17,17,255))
-    try:
-        rgb_c1 = hex_to_rgb(c1)
-        draw.rectangle([(0,H),(8,H+etiqueta_h)], fill=tuple(rgb_c1)+(255,))
-    except: pass
-    draw.text((18, H+8), f"{nombre_cliente} | {firma} | {tipo_fractal} | C={cx:.4f}+{cy:.4f}i", fill=(255,255,255,255))
-    draw.text((18, H+32), f"{formula_txt} | DIA {dia}", fill=(170,170,170,255))
+    # Fondo blanco sin franja de color
+    draw.rectangle([(0,H),(W,H+etiqueta_h)], fill=fondo_etiqueta)
+    draw.text((14, H+6), texto_linea1, fill=(0,0,0,255))
+    draw.text((14, H+28), texto_linea2, fill=(0,0,0,255))
     img_final = nueva
 else:
     img_final = img_base
 
 st.image(img_final, use_container_width=True)
+
+# FRANJA FINAL IGUAL A LA DE ARRIBA - BLANCO CON TEXTO NEGRO - SIN FRANJA LATERAL
 st.markdown(f"""
-<div style="background:#111; padding:12px; border-radius:10px; border-left:5px solid {c1}">
-<b style="color:white;">{nombre_cliente} | {tipo_fractal}</b><br>
-<span style="color:#AAA; font-family:monospace; font-size:12px;">{formula_txt} | Paleta: {paleta_nombre}</span>
+<div style="background:white; padding:12px 14px; border-radius:8px; border:1px solid #DDD;">
+<b style="color:black; font-size:16px;">{texto_linea1}</b><br>
+<span style="color:black; font-family:monospace; font-size:13px;">{texto_linea2}</span>
 </div>
 """, unsafe_allow_html=True)
 
