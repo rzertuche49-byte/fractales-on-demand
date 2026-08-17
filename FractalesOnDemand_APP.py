@@ -3,8 +3,8 @@ import numpy as np
 from PIL import Image
 import io, math
 
-st.set_page_config(layout="wide", page_title="V83 Pro Portfolio")
-st.title("FRACTALES V83 - PORTFOLIO PRO")
+st.set_page_config(layout="wide", page_title="V84 Transparente")
+st.title("FRACTALES V84 - TRANSPARENTE PARA IMPRESION")
 
 def hex_to_rgb(h):
     h = h.lstrip('#')
@@ -16,9 +16,6 @@ PALETAS = {
     "Cyberpunk": ["#FF003C","#00F0FF","#F0FF00","#FF00F0","#00FF9F","#7000FF"],
     "Toxic": ["#00FF00","#CCFF00","#00FFCC","#FFFF00","#FF00FF","#00FFFF"],
     "Miami Vice": ["#FF6BEC","#3EFFE2","#FFD93D","#FF6B6B","#6BCB77","#4D96FF"],
-    "Sunset": ["#F72585","#7209B7","#3A0CA3","#4361EE","#4CC9F0","#FFBE0B"],
-    "Oceano": ["#001F54","#034078","#1282A2","#00B4D8","#90E0EF","#CAF0F8"],
-    "Pastel": ["#FFB5E8","#B5DEFF","#C3FF99","#FFF5BA","#FFC9DE","#D1BDFF"],
 }
 
 with st.sidebar:
@@ -26,7 +23,6 @@ with st.sidebar:
     zoom = st.slider("ZOOM", 0.2, 5.0, 0.88)
     paleta_nombre = st.selectbox("PALETA BASE", list(PALETAS.keys()), index=0)
     base = PALETAS[paleta_nombre]
-    st.write("---")
     st.write("**EDITA 6 COLORES**")
     c1 = st.color_picker("Color 1", base[0])
     c2 = st.color_picker("Color 2", base[1])
@@ -35,10 +31,15 @@ with st.sidebar:
     c5 = st.color_picker("Color 5", base[4])
     c6 = st.color_picker("Color 6", base[5])
     colores_actuales = [c1,c2,c3,c4,c5,c6]
-    st.write("---")
+
+    st.divider()
     tam = st.slider("Tamaño mancha", 0.1, 3.0, 1.8)
     brillo = st.slider("Brillo", 0.5, 2.5, 1.4)
-    firma = st.text_input("Firma portafolio", "FRACTALES ON DEMAND © 2026")
+
+    st.divider()
+    st.write("🖨️ **MODO IMPRESION**")
+    fondo_transparente = st.checkbox("Fondo transparente PNG", value=False)
+    umbral = st.slider("Limpieza fondo", 0.0, 5.0, 1.0, help="Sube si quieres que quite mas fondo negro")
 
 # Motor fractal
 t = dia/365*2*math.pi
@@ -50,6 +51,8 @@ x = np.linspace(-1.5/zoom, 1.5/zoom, 1000)
 y = np.linspace(-1.0/zoom, 1.0/zoom, 800)
 X,Y = np.meshgrid(x,y)
 Z = X+1j*Y
+
+# Guardamos magnitud final para mascara
 for _ in range(80):
     Z = Z*Z + c
 
@@ -72,28 +75,21 @@ for k in range(6):
 
 out = np.clip(out*brillo,0,255).astype(np.uint8)
 
-# MOSTRAR IMAGEN
-st.image(out, use_container_width=True)
+# CREAR ALPHA PARA TRANSPARENCIA
+# Donde el fractal es casi negro o muy poco brillante, lo hacemos transparente
+magnitud = np.abs(Z)
+# Si magnitud > 4 es fondo, si < 4 es fractal
+brillo_pixel = out.mean(axis=2) # 0-255
 
-# ETIQUETA CIENTIFICA PRO
-st.markdown(f"""
-<div style="background:#111; padding:15px; border-radius:10px; border-left:5px solid {c1}">
-<b style="color:white; font-size:18px;">{firma} | JULIA SET - DENDRITE</b><br>
-<span style="color:#AAA; font-family:monospace; font-size:13px;">
-Fórmula: Z<sub>n+1</sub> = Z<sub>n</sub>² + C &nbsp;|&nbsp; C = {cx:.4f} + {cy:.4f}i &nbsp;|&nbsp; DIA: {dia} &nbsp;|&nbsp; ZOOM: {zoom}x &nbsp;|&nbsp; Iteraciones: 80<br>
-Clasificación: Conjunto de Julia Conectado / Escape-Time Fractal / Arte Generativo<br>
-Paleta: {paleta_nombre} {colores_actuales}
-</span>
-</div>
-""", unsafe_allow_html=True)
+if fondo_transparente:
+    # Alpha: 0 transparente, 255 solido
+    alpha = np.where((magnitud < 4) & (brillo_pixel > (10 + umbral*10)), 255, 0).astype(np.uint8)
+    # Suavizado de borde
+    out_rgba = np.dstack((out, alpha))
+    img_final = Image.fromarray(out_rgba, "RGBA")
+    st.image(out_rgba, use_container_width=True, caption="MODO TRANSPARENTE - Fondo eliminado")
+else:
+    img_final = Image.fromarray(out, "RGB")
+    st.image(out, use_container_width=True)
 
-st.divider()
-col1, col2 = st.columns(2)
-with col1:
-    st.info("**¿Qué es?** Un Conjunto de Julia tipo Dendrita. Se genera iterando números complejos. Cada punto de color es cuánto tarda en escapar al infinito.")
-
-buf = io.BytesIO()
-Image.fromarray(out).save(buf, format="PNG")
-
-with col2:
-    st.download_button("📥 Descargar PNG para cliente (1000x800)", buf.getvalue(), f"fractal_JULIA_C_{cx:.3f}_{cy:.3f}.png", "image/png", type="primary", use_container_width=True)
+# Etiqueta
