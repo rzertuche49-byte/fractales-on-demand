@@ -3,7 +3,7 @@ import numpy as np
 from PIL import Image, ImageDraw, ImageFont
 import io, math
 
-st.set_page_config(layout="wide", page_title="Fractales On Demand V100 ETIQUETA GRANDE")
+st.set_page_config(layout="wide", page_title="Fractales On Demand V100.1 PROPORCION OPTIMA")
 
 def hex_to_rgb(h):
     h=h.lstrip('#')
@@ -16,23 +16,35 @@ def get_font_mono(size):
     try: return ImageFont.truetype("DejaVuSansMono-Bold.ttf", size)
     except: return ImageFont.load_default()
 
-# ETIQUETA GRANDE ABAJO - FUERA DEL FRACTAL
+# PROPORCION OPTIMA SEGUN TU IMAGEN: 13% alto etiqueta, texto compacto
 def crear_imagen_con_etiqueta_abajo(img_base, texto1, texto2, escala=1.0):
     W,H = img_base.size
-    label_h = int(170*escala) # mas alto para texto grande
+    label_h = int(H * 0.135) # proporcion optima de tu captura
     nueva_h = H + label_h
     nueva = Image.new("RGBA", (W, nueva_h), (255,255,255,255))
-    # pegar fractal arriba
     nueva.paste(img_base, (0,0), img_base if img_base.mode=="RGBA" else None)
     draw = ImageDraw.Draw(nueva)
-    # fondo blanco etiqueta
     draw.rectangle([0,H,W,nueva_h], fill=(255,255,255,255))
-    draw.line([0,H,W,H], fill=(235,235,235), width=int(2*escala))
-    font1 = get_font_bold(int(54*escala)) # ANTES 32 -> AHORA 54
-    font2 = get_font_mono(int(36*escala)) # ANTES 22 -> AHORA 36
-    pad_x = int(28*escala)
-    draw.text((pad_x, H+int(22*escala)), texto1, fill=(0,0,0,255), font=font1)
-    draw.text((pad_x, H+int(92*escala)), texto2, fill=(0,0,0,255), font=font2)
+    # borde superior muy sutil como en tu imagen
+    draw.line([0,H,W,H], fill=(230,230,230), width=1)
+
+    # Fuentes proporcion optima - como tu captura
+    font1 = get_font_bold(int(28*escala)) # ROBERTO ZERTUCHE
+    font2 = get_font_mono(int(19*escala)) # HEART | C=...
+
+    pad_x = int(18*escala)
+    pad_y1 = int(16*escala) # espacio arriba
+    pad_y2 = int(8*escala) # espacio entre lineas - compacto
+
+    # primera linea bold
+    draw.text((pad_x, H+pad_y1), texto1, fill=(0,0,0,255), font=font1)
+    # segunda linea mono debajo
+    try:
+        bbox1 = draw.textbbox((0,0), texto1, font=font1)
+        h1 = bbox1[3]-bbox1[1]
+    except:
+        h1 = int(30*escala)
+    draw.text((pad_x, H+pad_y1+h1+pad_y2), texto2, fill=(20,20,20,255), font=font2)
     return nueva
 
 def render_block(W_chunk, H_chunk, X, Y, c_var, tipo, iter_base=60):
@@ -96,6 +108,7 @@ def render_block(W_chunk, H_chunk, X, Y, c_var, tipo, iter_base=60):
         return Z
 
 def render_fractal_true(W, H, zoom, c_var, tipo_fractal, colores_rgb, tam, brillo_val, bg_mode, bg_rgb, umbral, texto1, texto2, incluir_etiqueta_abajo):
+    # H es alto del fractal solo, la etiqueta se agrega despues
     out_full = np.zeros((H, W, 3), dtype=np.uint8)
     mask_full = np.zeros((H, W), dtype=bool)
     ys = np.linspace(-1.0/zoom, 1.0/zoom, H)
@@ -185,10 +198,10 @@ with st.sidebar:
     nombre_cliente = st.text_input("Nombre del cliente / proyecto", "ROBERTO ZERTUCHE")
     codigos = st.text_input("Codigos", "49/316/267")
     st.divider()
-    tipo_fractal = st.selectbox("TIPO DE FRACTAL (21)", list(FRACTALES.keys()), 8)
+    tipo_fractal = st.selectbox("TIPO DE FRACTAL (21)", list(FRACTALES.keys()), 7)
     dia = st.slider("DIA", 1, 365, 49)
     zoom = st.slider("ZOOM", 0.2, 5.0, 1.0)
-    paleta_nombre = st.selectbox("PALETA", list(PALETAS.keys()), 0)
+    paleta_nombre = st.selectbox("PALETA", list(PALETAS.keys()), 2)
     base = PALETAS[paleta_nombre]
     st.write("**EDITA 6 COLORES**")
     c1=st.color_picker("C1", base[0], key=f"c1_{paleta_nombre}")
@@ -249,21 +262,22 @@ else:
     out_bg = out.copy(); out_bg[~mask]=bg_rgb
     img_base = Image.fromarray(out_bg.astype(np.uint8), "RGB").convert("RGBA")
 
-# 3 ESPACIOS ENTRE NOMBRE Y CODIGOS
+# 3 ESPACIOS
 if codigos.strip()!="":
     texto1=f"{nombre_cliente} {codigos}"
 else:
     texto1=nombre_cliente
 texto2=f"{tipo_fractal} | C={cx:.4f}+{cy:.4f}i | {FRACTALES[tipo_fractal]['formula']}"
 
+# MOSTRAR FRACTAL LIMPIO
 st.image(img_base, width=1000)
 
+# ETIQUETA ABAJO CON PROPORCION EXACTA DE TU CAPTURA
 if presentar_etiqueta:
-    # VISTA PREVIA MAS GRANDE
     st.markdown(f"""
-    <div style="background:white;padding:22px 28px;border-radius:12px;border:1px solid #EAEAEA;margin-top:12px;">
-        <div style="color:black;font-weight:900;font-size:34px;letter-spacing:0.2px;">{texto1}</div>
-        <div style="color:black;font-family:monospace;font-size:28px;margin-top:10px;">{texto2}</div>
+    <div style="background:white;padding:14px 18px 16px 18px;border-radius:0 0 12px 12px;border:1px solid #E8E8E8;border-top:none;margin-top:-4px;">
+        <div style="color:black;font-weight:800;font-size:18px;letter-spacing:0.1px;line-height:1.2;">{texto1}</div>
+        <div style="color:#111;font-family:monospace;font-size:14px;margin-top:6px;line-height:1.2;letter-spacing:0.2px;">{texto2}</div>
     </div>
     """, unsafe_allow_html=True)
     img_export_preview = crear_imagen_con_etiqueta_abajo(img_base, texto1, texto2, escala=1.0)
@@ -275,13 +289,19 @@ colores_rgb = [hex_to_rgb(c) for c in colores_actuales]
 with st.sidebar:
     buf=io.BytesIO()
     img_export_preview.save(buf, format="PNG")
-    st.download_button("PNG Standard 1000x800", buf.getvalue(), f"{nombre_cliente}_STD_{fondo_mode}.png", "image/png", key="png_std")
+    st.download_button("PNG Standard con etiqueta abajo", buf.getvalue(), f"{nombre_cliente}_STD_{fondo_mode}_ETIQUETA.png", "image/png", key="png_std")
 
     if render_real_8k:
-        if st.button("Generar 8K REAL NITIDO (2 min)", key="gen8k"):
+        if st.button("Generar 8K REAL con etiqueta proporcion optima", key="gen8k"):
             img_e = render_fractal_true(7680,6144, zoom, c_var, tipo_fractal, colores_rgb, tam, brillo, fondo_mode, bg_rgb, umbral, texto1, texto2, presentar_etiqueta)
             buf=io.BytesIO(); img_e.save(buf, format="PNG")
-            st.download_button("⬇️ PNG 8K REAL", buf.getvalue(), f"{nombre_cliente}_8K_REAL_{fondo_mode}.png", "image/png", key="png_8k_real")
+            st.download_button("⬇️ PNG 8K REAL con etiqueta", buf.getvalue(), f"{nombre_cliente}_8K_REAL_{fondo_mode}_ETIQUETA.png", "image/png", key="png_8k_real")
             buf2=io.BytesIO(); img_e.convert("RGB").save(buf2, format="PDF", resolution=300.0)
-            st.download_button("⬇️ PDF 8K REAL 300dpi", buf2.getvalue(), f"{nombre_cliente}_8K_REAL_{fondo_mode}.pdf", "application/pdf", key="pdf_8k_real")
-            st.success("Etiqueta grande con 3 espacios - lista para imprenta")
+            st.download_button("⬇️ PDF 8K REAL 300dpi con etiqueta", buf2.getvalue(), f"{nombre_cliente}_8K_REAL_{fondo_mode}_ETIQUETA.pdf", "application/pdf", key="pdf_8k_real")
+            st.success("Proporcion optima guardada: 13.5% etiqueta, texto balanceado")
+    else:
+        for Wc,Hc,label in [(3840,3072,"4K"), (7680,6144,"8K")]:
+            img_e=render_fractal_true(Wc,Hc, zoom, c_var, tipo_fractal, colores_rgb, tam, brillo, fondo_mode, bg_rgb, umbral, texto1, texto2, presentar_etiqueta)
+            buf=io.BytesIO(); img_e.save(buf, format="PNG")
+            st.download_button(f"PNG {label} con etiqueta abajo", buf.getvalue(), f"{nombre_cliente}_{label}_{fondo_mode}_ETIQUETA.png", "image/png", key=f"png_{label}_{fondo_mode}")
+            
