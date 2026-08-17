@@ -3,7 +3,7 @@ import numpy as np
 from PIL import Image, ImageDraw, ImageFont
 import io, math
 
-st.set_page_config(layout="wide", page_title="Fractales On Demand V102 365 DIAS")
+st.set_page_config(layout="wide", page_title="Fractales On Demand V102.1 FIX 365")
 
 def hex_to_rgb(h):
     h=h.lstrip('#')
@@ -152,192 +152,6 @@ def render_fractal_true(W, H, zoom, c_var, tipo_fractal, colores_rgb, tam, brill
         img_true=crear_imagen_con_etiqueta_abajo(img_true, texto1, texto2, W/1000)
     return img_true
 
-def generar_animacion(W, H, zoom, c_var, tipo_fractal, colores_rgb, tam, brillo_val, bg_mode, bg_rgb, umbral, anim_tipo, num_frames, zoom_start, texto1, texto2, incluir_etiqueta, FRACTALES_DICT):
-    palette = np.array(colores_rgb, float)
-    frames = []
-    if anim_tipo == "Crecimiento por iteraciones":
-        it_steps = np.linspace(2, 60, num_frames, dtype=int)
-        x = np.linspace(-1.5/zoom, 1.5/zoom, W)
-        y = np.linspace(-1.0/zoom, 1.0/zoom, H)
-        X,Y = np.meshgrid(x,y)
-        Z0 = X+1j*Y
-        for idx, it in enumerate(it_steps):
-            Z = Z0.copy()
-            if tipo_fractal=="BURNING SHIP JULIA":
-                for _ in range(it):
-                    Z=(np.abs(Z.real)+1j*np.abs(Z.imag))**2+c_var
-            else:
-                for _ in range(it):
-                    Z=Z*Z+c_var
-            if tipo_fractal in ("NEWTON","NOVA"):
-                s = (np.angle(Z)+np.pi)/(2*np.pi)
-            else:
-                s = (np.angle(Z)*0.22+np.log(np.abs(Z)+1)*tam)*0.375 % 1.0
-            pos=s*6.0
-            i0=np.floor(pos).astype(int)%6
-            f=pos-np.floor(pos)
-            f=0.5*(1-np.cos(f*np.pi))
-            out=np.zeros((H,W,3),float)
-            for k in range(6):
-                m=i0==k
-                nk=(k+1)%6
-                out[m,0]=(1-f[m])*palette[k,0]+f[m]*palette[nk,0]
-                out[m,1]=(1-f[m])*palette[k,1]+f[m]*palette[nk,1]
-                out[m,2]=(1-f[m])*palette[k,2]+f[m]*palette[nk,2]
-            out=np.clip(out*brillo_val,0,255)
-            mag=np.abs(Z)
-            br_pix=np.mean(out, axis=2)
-            if tipo_fractal in ("NEWTON","NOVA"):
-                mask = br_pix > (10+umbral*10)
-            else:
-                mask = mag < 4
-            if bg_mode!="Transparente":
-                bg_arr=np.zeros_like(out)
-                bg_arr[:,:]=bg_rgb
-                out=np.where(mask[:,:,None], out, bg_arr)
-                img=Image.fromarray(out.astype(np.uint8), "RGB").convert("RGBA")
-            else:
-                alpha=np.where(mask,255,0).astype(np.uint8)
-                img=Image.fromarray(np.dstack((out.astype(np.uint8),alpha)), "RGBA")
-            if incluir_etiqueta:
-                t1f = f"{texto1} | FRAME {idx+1}/{num_frames} it={it}"
-                img = crear_imagen_con_etiqueta_abajo(img, t1f, texto2)
-            frames.append(img)
-    elif anim_tipo == "Zoom progresivo":
-        zooms = np.linspace(zoom_start, zoom, num_frames)
-        for idx, zm in enumerate(zooms):
-            ys = np.linspace(-1.0/zm, 1.0/zm, H)
-            xs = np.linspace(-1.5/zm, 1.5/zm, W)
-            X,Y = np.meshgrid(xs, ys)
-            Z = render_block(W, H, X, Y, c_var, tipo_fractal, 60)
-            if tipo_fractal in ("NEWTON","NOVA"):
-                s = (np.angle(Z)+np.pi)/(2*np.pi)
-            else:
-                s = (np.angle(Z)*0.22+np.log(np.abs(Z)+1)*tam)*0.375 % 1.0
-            pos=s*6.0
-            i0=np.floor(pos).astype(int)%6
-            f=pos-np.floor(pos)
-            f=0.5*(1-np.cos(f*np.pi))
-            out=np.zeros((H,W,3),float)
-            for k in range(6):
-                m=i0==k
-                nk=(k+1)%6
-                out[m,0]=(1-f[m])*palette[k,0]+f[m]*palette[nk,0]
-                out[m,1]=(1-f[m])*palette[k,1]+f[m]*palette[nk,1]
-                out[m,2]=(1-f[m])*palette[k,2]+f[m]*palette[nk,2]
-            out=np.clip(out*brillo_val,0,255)
-            mag=np.abs(Z)
-            br_pix=np.mean(out, axis=2)
-            if tipo_fractal in ("NEWTON","NOVA"):
-                mask = br_pix > (10+umbral*10)
-            else:
-                mask = np.logical_and(mag < 4, br_pix > (10+umbral*10))
-            if bg_mode!="Transparente":
-                bg_arr=np.zeros_like(out)
-                bg_arr[:,:]=bg_rgb
-                out=np.where(mask[:,:,None], out, bg_arr)
-                img=Image.fromarray(out.astype(np.uint8), "RGB").convert("RGBA")
-            else:
-                alpha=np.where(mask,255,0).astype(np.uint8)
-                img=Image.fromarray(np.dstack((out.astype(np.uint8),alpha)), "RGBA")
-            if incluir_etiqueta:
-                t1f = f"{texto1} | ZOOM {zm:.2f}x FRAME {idx+1}/{num_frames}"
-                img = crear_imagen_con_etiqueta_abajo(img, t1f, texto2)
-            frames.append(img)
-    elif anim_tipo == "Zoom + Crecimiento":
-        it_steps = np.linspace(2, 60, num_frames, dtype=int)
-        zooms = np.linspace(zoom_start, zoom, num_frames)
-        for idx in range(num_frames):
-            it = int(it_steps[idx])
-            zm = float(zooms[idx])
-            ys = np.linspace(-1.0/zm, 1.0/zm, H)
-            xs = np.linspace(-1.5/zm, 1.5/zm, W)
-            X,Y = np.meshgrid(xs, ys)
-            Z = X+1j*Y
-            for _ in range(it):
-                Z=Z*Z+c_var
-            s = (np.angle(Z)*0.22+np.log(np.abs(Z)+1)*tam)*0.375 % 1.0
-            pos=s*6.0
-            i0=np.floor(pos).astype(int)%6
-            f=pos-np.floor(pos)
-            f=0.5*(1-np.cos(f*np.pi))
-            out=np.zeros((H,W,3),float)
-            for k in range(6):
-                m=i0==k
-                nk=(k+1)%6
-                out[m,0]=(1-f[m])*palette[k,0]+f[m]*palette[nk,0]
-                out[m,1]=(1-f[m])*palette[k,1]+f[m]*palette[nk,1]
-                out[m,2]=(1-f[m])*palette[k,2]+f[m]*palette[nk,2]
-            out=np.clip(out*brillo_val,0,255)
-            mag=np.abs(Z)
-            mask = mag < 4
-            if bg_mode!="Transparente":
-                bg_arr=np.zeros_like(out)
-                bg_arr[:,:]=bg_rgb
-                out=np.where(mask[:,:,None], out, bg_arr)
-                img=Image.fromarray(out.astype(np.uint8), "RGB").convert("RGBA")
-            else:
-                alpha=np.where(mask,255,0).astype(np.uint8)
-                img=Image.fromarray(np.dstack((out.astype(np.uint8),alpha)), "RGBA")
-            if incluir_etiqueta:
-                t1f = f"{texto1} | it={it} zoom={zm:.2f}x"
-                img = crear_imagen_con_etiqueta_abajo(img, t1f, texto2)
-            frames.append(img)
-    elif anim_tipo == "365 dias - año completo":
-        dias_anim = np.linspace(1, 365, num_frames)
-        for idx, d in enumerate(dias_anim):
-            t_anim = d/365*2*math.pi
-            base_c_anim = FRACTALES_DICT[tipo_fractal]["c"]
-            es_fijo_anim = tipo_fractal in ("MANDELBROT","TRICORN","BURNING SHIP MANDELBROT","BUFFALO","CELTIC","MULTIBROT 3","MULTIBROT 4","NEWTON")
-            es_nova_anim = tipo_fractal=="NOVA"
-            if es_fijo_anim or es_nova_anim:
-                cx_a = base_c_anim.real
-                cy_a = base_c_anim.imag
-            else:
-                cx_a = base_c_anim.real+0.005*math.cos(t_anim*3)
-                cy_a = base_c_anim.imag+0.005*math.sin(t_anim*3)
-            c_var_a = complex(cx_a, cy_a)
-            ys = np.linspace(-1.0/zoom, 1.0/zoom, H)
-            xs = np.linspace(-1.5/zoom, 1.5/zoom, W)
-            X,Y = np.meshgrid(xs, ys)
-            Z = render_block(W, H, X, Y, c_var_a, tipo_fractal, 60)
-            if tipo_fractal in ("NEWTON","NOVA"):
-                s = (np.angle(Z)+np.pi)/(2*np.pi)
-            else:
-                s = (np.angle(Z)*0.22+np.log(np.abs(Z)+1)*tam)*0.375 % 1.0
-            pos=s*6.0
-            i0=np.floor(pos).astype(int)%6
-            f=pos-np.floor(pos)
-            f=0.5*(1-np.cos(f*np.pi))
-            out=np.zeros((H,W,3),float)
-            for k in range(6):
-                m=i0==k
-                nk=(k+1)%6
-                out[m,0]=(1-f[m])*palette[k,0]+f[m]*palette[nk,0]
-                out[m,1]=(1-f[m])*palette[k,1]+f[m]*palette[nk,1]
-                out[m,2]=(1-f[m])*palette[k,2]+f[m]*palette[nk,2]
-            out=np.clip(out*brillo_val,0,255)
-            mag=np.abs(Z)
-            br_pix=np.mean(out, axis=2)
-            if tipo_fractal in ("NEWTON","NOVA"):
-                mask = br_pix > (10+umbral*10)
-            else:
-                mask = np.logical_and(mag < 4, br_pix > (10+umbral*10))
-            if bg_mode!="Transparente":
-                bg_arr=np.zeros_like(out)
-                bg_arr[:,:]=bg_rgb
-                out=np.where(mask[:,:,None], out, bg_arr)
-                img=Image.fromarray(out.astype(np.uint8), "RGB").convert("RGBA")
-            else:
-                alpha=np.where(mask,255,0).astype(np.uint8)
-                img=Image.fromarray(np.dstack((out.astype(np.uint8),alpha)), "RGBA")
-            if incluir_etiqueta:
-                t1f = f"{texto1} | DIA {int(d)}/365"
-                t2f = f"{tipo_fractal} | C={cx_a:.4f}+{cy_a:.4f}i | {FRACTALES_DICT[tipo_fractal]['formula']}"
-                img = crear_imagen_con_etiqueta_abajo(img, t1f, t2f)
-            frames.append(img)
-    return frames
-
 PALETAS = {
     "Tu captura": ["#00FFFF","#0064FF","#FF00C8","#FF6400","#FFFF00","#00FF64"],
     "Neon 80s": ["#00FFFF","#FF00FF","#FFFF00","#00FF00","#FF0066","#6600FF"],
@@ -418,7 +232,7 @@ with st.sidebar:
     num_frames = st.slider("Numero de frames", 10, 365, 60)
     duracion = st.slider("Duracion por frame ms", 50, 300, 120)
     zoom_start = st.slider("Zoom inicial", 0.1, 2.0, 0.3)
-    anim_w = st.selectbox("Resolucion animacion", ["800x600 rapida", "1280x960 media", "1920x1536 lenta"], 0)
+    anim_w = st.selectbox("Resolucion animacion", ["400x300 ultra ligera (para 365)", "800x600 rapida", "1280x960 media"], 0)
     st.divider()
     render_real_8k = st.checkbox("Render 8K REAL para imprenta", value=True)
 
@@ -515,27 +329,122 @@ with st.sidebar:
 
 st.divider()
 st.subheader(f"Animacion {anim_tipo} - {num_frames} frames")
-if "800" in anim_w:
+
+if "400" in anim_w:
+    aW,aH=400,300
+elif "800" in anim_w:
     aW,aH=800,600
-elif "1280" in anim_w:
-    aW,aH=1280,960
 else:
-    aW,aH=1920,1536
+    aW,aH=1280,960
+
+# Para 365 dias forzamos ultra ligera si no lo esta
+if anim_tipo == "365 dias - año completo" and num_frames > 100 and aW > 400:
+    st.warning("Para 365 dias te recomiendo 400x300 ultra ligera para evitar el error removeChild. Lo fuerzo a 400x300.")
+    aW,aH=400,300
 
 if st.button("Generar Animacion", key="gen_anim"):
-    with st.spinner(f"Generando {num_frames} frames {anim_tipo}..."):
-        frames = generar_animacion(aW, aH, zoom, c_var, tipo_fractal, colores_rgb, tam, brillo, fondo_mode, bg_rgb, umbral, anim_tipo, num_frames, zoom_start, texto1, texto2, presentar_etiqueta, FRACTALES)
-        st.image(frames[-1], caption=f"Ultimo frame - {anim_tipo}", width=800)
-        gif_buf = io.BytesIO()
-        frames_rgb = [f.convert("RGB") for f in frames]
-        frames_rgb[0].save(gif_buf, format="GIF", save_all=True, append_images=frames_rgb[1:], duration=duracion, loop=0, optimize=True)
-        st.download_button("Descargar GIF Animado", gif_buf.getvalue(), f"{nombre_cliente}_{anim_tipo}_ANIM.gif", "image/gif", key="gif_anim")
-        st.success(f"Animacion lista: {len(frames)} frames")
-        cols = st.columns(4)
-        idxs = [0, len(frames)//3, 2*len(frames)//3, -1]
-        for i, col in zip(idxs, cols):
-            if i==-1:
-                i=len(frames)-1
-            col.image(frames[i], caption=f"Frame {i+1}", width=200)
-            
+    progress = st.progress(0)
+    status = st.empty()
+    frames_rgb = []
 
+    dias_anim = np.linspace(1, 365, num_frames) if anim_tipo == "365 dias - año completo" else [0]*num_frames
+    it_steps = np.linspace(2, 60, num_frames, dtype=int)
+    zooms = np.linspace(zoom_start, zoom, num_frames)
+
+    palette_anim = np.array(colores_rgb, float)
+
+    for idx in range(num_frames):
+        # Calcular c_var segun tipo
+        if anim_tipo == "365 dias - año completo":
+            d = dias_anim[idx]
+            t_anim = d/365*2*math.pi
+            base_c_anim = FRACTALES[tipo_fractal]["c"]
+            if tipo_fractal in ("MANDELBROT","TRICORN","BURNING SHIP MANDELBROT","BUFFALO","CELTIC","MULTIBROT 3","MULTIBROT 4","NEWTON") or tipo_fractal=="NOVA":
+                cx_a = base_c_anim.real
+                cy_a = base_c_anim.imag
+            else:
+                cx_a = base_c_anim.real+0.005*math.cos(t_anim*3)
+                cy_a = base_c_anim.imag+0.005*math.sin(t_anim*3)
+            c_var_a = complex(cx_a, cy_a)
+            zm = zoom
+            it = 60
+        elif anim_tipo == "Crecimiento por iteraciones":
+            c_var_a = c_var
+            zm = zoom
+            it = int(it_steps[idx])
+        elif anim_tipo == "Zoom progresivo":
+            c_var_a = c_var
+            zm = float(zooms[idx])
+            it = 60
+        else: # Zoom + Crecimiento
+            c_var_a = c_var
+            zm = float(zooms[idx])
+            it = int(it_steps[idx])
+
+        ys = np.linspace(-1.0/zm, 1.0/zm, aH)
+        xs = np.linspace(-1.5/zm, 1.5/zm, aW)
+        Xg,Yg = np.meshgrid(xs, ys)
+
+        if anim_tipo == "Crecimiento por iteraciones" and tipo_fractal not in ("NEWTON","NOVA","MANDELBROT"):
+            Z = Xg+1j*Yg
+            for _ in range(it):
+                Z=Z*Z+c_var_a
+        else:
+            Z = render_block(aW, aH, Xg, Yg, c_var_a, tipo_fractal, it)
+
+        if tipo_fractal in ("NEWTON","NOVA"):
+            s = (np.angle(Z)+np.pi)/(2*np.pi)
+        else:
+            s = (np.angle(Z)*0.22+np.log(np.abs(Z)+1)*tam)*0.375 % 1.0
+        pos=s*6.0
+        i0=np.floor(pos).astype(int)%6
+        f=pos-np.floor(pos)
+        f=0.5*(1-np.cos(f*np.pi))
+        out=np.zeros((aH,aW,3),float)
+        for k in range(6):
+            m=i0==k
+            nk=(k+1)%6
+            out[m,0]=(1-f[m])*palette_anim[k,0]+f[m]*palette_anim[nk,0]
+            out[m,1]=(1-f[m])*palette_anim[k,1]+f[m]*palette_anim[nk,1]
+            out[m,2]=(1-f[m])*palette_anim[k,2]+f[m]*palette_anim[nk,2]
+        out=np.clip(out*brillo,0,255)
+        mag=np.abs(Z)
+        br_pix=np.mean(out, axis=2)
+        if tipo_fractal in ("NEWTON","NOVA"):
+            mask = br_pix > (10+umbral*10)
+        else:
+            mask = np.logical_and(mag < 4, br_pix > (10+umbral*10))
+        if bg_mode!="Transparente":
+            bg_arr=np.zeros_like(out)
+            bg_arr[:,:]=bg_rgb
+            out=np.where(mask[:,:,None], out, bg_arr)
+            img=Image.fromarray(out.astype(np.uint8), "RGB")
+        else:
+            # para GIF con transparencia no funciona bien, lo forzamos a negro
+            out[~mask]=0
+            img=Image.fromarray(out.astype(np.uint8), "RGB")
+
+        if presentar_etiqueta and anim_tipo == "365 dias - año completo":
+            # para GIF 365 no ponemos etiqueta grande, solo texto pequeño en status
+            pass
+        elif presentar_etiqueta:
+            t1f = f"{texto1} | FRAME {idx+1}"
+            img_rgba = img.convert("RGBA")
+            img = crear_imagen_con_etiqueta_abajo(img_rgba, t1f, texto2).convert("RGB")
+
+        frames_rgb.append(img)
+
+        if idx % 5 == 0:
+            progress.progress((idx+1)/num_frames)
+            status.text(f"Generando frame {idx+1}/{num_frames}...")
+
+    progress.progress(1.0)
+    status.text("Compilando GIF...")
+
+    # COMPILAR GIF EN UN SOLO BUFFER - EVITA RENDER MULTIPLE
+    gif_buf = io.BytesIO()
+    frames_rgb[0].save(gif_buf, format="GIF", save_all=True, append_images=frames_rgb[1:], duration=duracion, loop=0, optimize=True)
+
+    st.success(f"Animacion lista: {len(frames_rgb)} frames - {aW}x{aH}")
+    st.image(frames_rgb[-1], caption=f"Ultimo frame - {anim_tipo}", width=600)
+    st.download_button("⬇️ Descargar GIF Animado", gif_buf.getvalue(), f"{nombre_cliente}_{anim_tipo}_ANIM.gif", "image/gif", key="gif_anim")
