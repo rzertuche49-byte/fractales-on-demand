@@ -3,22 +3,21 @@ import numpy as np
 from PIL import Image, ImageDraw, ImageFont
 import io, math
 
-st.set_page_config(layout="wide", page_title="Fractales V104 RESTAURADA ESTABLE")
+st.set_page_config(layout="wide", page_title="Fractales V105 ANTI removeChild")
 
 def hex_to_rgb(h):
     h=h.lstrip('#')
     return [int(h[0:2],16), int(h[2:4],16), int(h[4:6],16)]
 
 def get_font(size, bold=True):
-    size=int(max(size,10))
+    size=int(max(size,8))
     try:
         from matplotlib import font_manager
         name="DejaVu Sans" if bold else "DejaVu Sans Mono"
         fp=font_manager.findfont(name, fallback_to_default=True)
         return ImageFont.truetype(fp, size)
     except:
-        try: return ImageFont.truetype("DejaVuSans.ttf", size)
-        except: return ImageFont.load_default()
+        return ImageFont.load_default()
 
 def crear_imagen_con_etiqueta_abajo(img_base, texto1, texto2):
     W,H=img_base.size
@@ -29,48 +28,47 @@ def crear_imagen_con_etiqueta_abajo(img_base, texto1, texto2):
     else:
         nueva.paste(img_base,(0,0))
     draw=ImageDraw.Draw(nueva)
-    f1=int(W*0.016); f2=int(W*0.010)
+    f1=int(W*0.018); f2=int(W*0.011)
     font1=get_font(f1,True); font2=get_font(f2,False)
-    draw.text((int(W*0.02), H+int(label_h*0.15)), texto1, fill=(0,0,0), font=font1)
+    draw.text((int(W*0.02),H+int(label_h*0.12)),texto1,fill=(0,0,0),font=font1)
     try:
-        bbox=draw.textbbox((0,0), texto1, font=font1); h1=bbox[3]-bbox[1]
+        bbox=draw.textbbox((0,0),texto1,font=font1); h1=bbox[3]-bbox[1]
     except: h1=f1
-    draw.text((int(W*0.02), H+int(label_h*0.15)+h1+int(label_h*0.08)), texto2, fill=(0,0,0), font=font2)
+    draw.text((int(W*0.02),H+int(label_h*0.12)+h1+4),texto2,fill=(30,30,30),font=font2)
     return nueva
 
-@st.cache_data
-def render_preview_cached(W,H,zoom,cx,cy,tipo,tam,brillo,colores_tuple,bg_tuple,umbral):
+@st.cache_data(show_spinner=False)
+def render_cached(W,H,zoom,cx,cy,tipo,tam,brillo,colores_tuple,bg_tuple,umbral,iteraciones):
     xs=np.linspace(-1.5/zoom,1.5/zoom,W)
     ys=np.linspace(-1.0/zoom,1.0/zoom,H)
     X,Y=np.meshgrid(xs,ys)
     Z=X+1j*Y
     c_var=complex(cx,cy)
-    # PREVIEW rapido 40 iteraciones
-    it=20 if tipo in ("NEWTON","NOVA") else 40
+
     if tipo=="MANDELBROT":
         C=(X-0.5)+1j*Y; Z=np.zeros_like(C)
-        for _ in range(it): Z=Z*Z+C
+        for _ in range(iteraciones): Z=Z*Z+C
     elif tipo=="TRICORN":
         C=(X-0.5)+1j*Y; Z=np.zeros_like(C)
-        for _ in range(it): Z=np.conj(Z)**2+C
+        for _ in range(iteraciones): Z=np.conj(Z)**2+C
     elif tipo=="BURNING SHIP MANDELBROT":
         C=(X-0.5)+1j*Y; Z=np.zeros_like(C)
-        for _ in range(it): Z=(np.abs(Z.real)+1j*np.abs(Z.imag))**2+C
+        for _ in range(iteraciones): Z=(np.abs(Z.real)+1j*np.abs(Z.imag))**2+C
     elif tipo=="BUFFALO":
         C=(X-0.5)+1j*Y; Z=np.zeros_like(C)
-        for _ in range(it):
+        for _ in range(iteraciones):
             ZR=np.abs(Z.real); ZI=np.abs(Z.imag)
             Z=(ZR*ZR-ZI*ZI)+2*ZR*ZI*1j+C
     elif tipo=="CELTIC":
         C=(X-0.5)+1j*Y; Z=np.zeros_like(C)
-        for _ in range(it):
+        for _ in range(iteraciones):
             Z2=Z*Z; Z=np.abs(Z2.real)+1j*Z2.imag+C
     elif tipo=="MULTIBROT 3":
         C=(X-0.5)+1j*Y; Z=np.zeros_like(C)
-        for _ in range(it): Z=Z**3+C
+        for _ in range(iteraciones): Z=Z**3+C
     elif tipo=="MULTIBROT 4":
         C=(X-0.5)+1j*Y; Z=np.zeros_like(C)
-        for _ in range(it): Z=Z**4+C
+        for _ in range(iteraciones): Z=Z**4+C
     elif tipo=="NEWTON":
         for _ in range(20):
             Z2=Z*Z; Z3=Z2*Z; d=np.where(np.abs(3*Z2)<1e-6,1e-6,3*Z2); Z=Z-(Z3-1)/d
@@ -78,9 +76,9 @@ def render_preview_cached(W,H,zoom,cx,cy,tipo,tam,brillo,colores_tuple,bg_tuple,
         for _ in range(40):
             Z2=Z*Z; Z3=Z2*Z; d=np.where(np.abs(3*Z2)<1e-6,1e-6,3*Z2); Z=Z-(Z3-1)/d+c_var
     elif tipo=="BURNING SHIP JULIA":
-        for _ in range(it): Z=(np.abs(Z.real)+1j*np.abs(Z.imag))**2+c_var
+        for _ in range(iteraciones): Z=(np.abs(Z.real)+1j*np.abs(Z.imag))**2+c_var
     else:
-        for _ in range(it): Z=Z*Z+c_var
+        for _ in range(iteraciones): Z=Z*Z+c_var
 
     if tipo in ("NEWTON","NOVA"):
         s=(np.angle(Z)+np.pi)/(2*np.pi)
@@ -102,8 +100,7 @@ def render_preview_cached(W,H,zoom,cx,cy,tipo,tam,brillo,colores_tuple,bg_tuple,
     else:
         mask=np.logical_and(mag<4, br_pix>(10+umbral*10))
 
-    # Manejo fondo
-    if len(bg_tuple)==4 and bg_tuple[3]==0: # Transparente flag
+    if len(bg_tuple)==4 and bg_tuple[3]==0:
         alpha=np.where(mask,255,0).astype(np.uint8)
         img=Image.fromarray(np.dstack((out.astype(np.uint8),alpha)),"RGBA")
     else:
@@ -135,7 +132,7 @@ PALETAS = {
     "Elegante": ["#000000","#1A1A1A","#D4AF37","#F5F5DC","#8B7355","#FFFFFF"],
 }
 FRACTALES = {
-    "HORSESHOE": {"c": complex(-0.74543, 0.11301), "formula": "HERRADURA | C=-0,745+0,113i"},
+    "HORSESHOE": {"c": complex(-0.74543, 0.11301), "formula": "HORSESHOE | C=-0,74543+0,11301i"},
     "RABBIT": {"c": complex(-0.123, 0.745), "formula": "Zn+1=Zn2+C"},
     "DENDRITE": {"c": complex(-0.745, 0.11), "formula": "Zn+1=Zn2+C"},
     "SPIRAL": {"c": complex(-0.77568377, 0.13646737), "formula": "Zn+1=Zn2+C"},
@@ -158,167 +155,122 @@ FRACTALES = {
     "SINE": {"c": complex(0.5, 0.5), "formula": "Zn+1=sin(Zn)+C"},
 }
 
+# --- SIDEBAR ---
 with st.sidebar:
-    st.title("Fractales V104 RESTAURADA")
-    nombre_cliente = st.text_input("Cliente", "ROBERTO ZERTUCHE")
-    codigos = st.text_input("Códigos", "49/316/267")
-    st.divider()
-    tipo_fractal = st.selectbox("TIPO DE FRACTAL (21)", list(FRACTALES.keys()), 0)
-    dia = st.slider("DIA", 1, 365, 49)
-    zoom = st.slider("ZOOM FINAL", 0.2, 5.0, 1.0)
-    paleta_nombre = st.selectbox("PALETA", list(PALETAS.keys()), 0)
+    st.write("### Fractales V105 ANTI removeChild")
+    nombre_cliente = st.text_input("Cliente", "ROBERTO ZERTUCHE", key="cliente")
+    codigos = st.text_input("Códigos", "49/316/267", key="codigos")
+    tipo_fractal = st.selectbox("TIPO DE FRACTAL (21)", list(FRACTALES.keys()), 0, key="tipo")
+    dia = st.slider("DIA", 1, 365, 49, key="dia")
+    zoom = st.slider("ZOOM FINAL", 0.2, 5.0, 1.0, key="zoom")
+    paleta_nombre = st.selectbox("PALETA", list(PALETAS.keys()), 0, key="paleta")
     base = PALETAS[paleta_nombre]
     st.write("**EDITA 6 COLORES**")
-    c1=st.color_picker("C1", base[0], key=f"c1_{paleta_nombre}")
-    c2=st.color_picker("C2", base[1], key=f"c2_{paleta_nombre}")
-    c3=st.color_picker("C3", base[2], key=f"c3_{paleta_nombre}")
-    c4=st.color_picker("C4", base[3], key=f"c4_{paleta_nombre}")
-    c5=st.color_picker("C5", base[4], key=f"c5_{paleta_nombre}")
-    c6=st.color_picker("C6", base[5], key=f"c6_{paleta_nombre}")
+    c1=st.color_picker("C1", base[0], key="c1")
+    c2=st.color_picker("C2", base[1], key="c2")
+    c3=st.color_picker("C3", base[2], key="c3")
+    c4=st.color_picker("C4", base[3], key="c4")
+    c5=st.color_picker("C5", base[4], key="c5")
+    c6=st.color_picker("C6", base[5], key="c6")
     colores_actuales=[c1,c2,c3,c4,c5,c6]
-    st.write("---")
-    tam = st.slider("Tamano mancha", 0.1, 3.0, 1.8)
-    brillo = st.slider("Brillo", 0.5, 2.5, 1.4)
-    st.divider()
-    fondo_mode = st.selectbox("FONDO", ["Negro", "Blanco", "Transparente", "Color de paleta"], 0)
-    fondo_color_custom = "#FF00C8"
-    if fondo_mode == "Color de paleta":
-        fondo_color_custom = st.color_picker("Elige color de fondo", base[0], key=f"bg_{paleta_nombre}")
-    umbral = st.slider("Limpieza fondo", 0.0, 5.0, 1.0)
-    presentar_etiqueta = st.checkbox("Presentar etiqueta debajo (mitad)", True)
-    st.divider()
-    anim_tipo = st.selectbox("Animacion en nube", ["Crecimiento 12 frames", "Crecimiento 60 frames"], 0)
-    st.caption("365 dias se genera local - ver abajo")
+    tam = st.slider("Tamano mancha", 0.1, 3.0, 1.8, key="tam")
+    brillo = st.slider("Brillo", 0.5, 2.5, 1.4, key="brillo")
+    fondo_mode = st.selectbox("FONDO", ["Negro", "Blanco", "Transparente", "Color de paleta"], 0, key="fondo")
+    fondo_color_custom="#FF00C8"
+    if fondo_mode=="Color de paleta":
+        fondo_color_custom=st.color_picker("Color fondo", base[0], key="bgpick")
+    umbral = st.slider("Limpieza fondo", 0.0, 5.0, 1.0, key="umbral")
+    presentar_etiqueta = st.checkbox("Presentar etiqueta mitad", True, key="etiqueta")
 
-# Fondos
-if fondo_mode == "Negro": bg_tuple=(0,0,0)
-elif fondo_mode == "Blanco": bg_tuple=(255,255,255)
-elif fondo_mode == "Transparente": bg_tuple=(0,0,0,0)
+if fondo_mode=="Negro": bg_tuple=(0,0,0)
+elif fondo_mode=="Blanco": bg_tuple=(255,255,255)
+elif fondo_mode=="Transparente": bg_tuple=(0,0,0,0)
 else: bg_tuple=tuple(hex_to_rgb(fondo_color_custom))
 
+# Calculo C segun DIA
 t=dia/365*2*math.pi
 base_c=FRACTALES[tipo_fractal]["c"]
-es_fijo=tipo_fractal in ("MANDELBROT","TRICORN","BURNING SHIP MANDELBROT","BUFFALO","CELTIC","MULTIBROT 3","MULTIBROT 4","NEWTON")
-if es_fijo or tipo_fractal=="NOVA":
+if tipo_fractal in ("MANDELBROT","TRICORN","BURNING SHIP MANDELBROT","BUFFALO","CELTIC","MULTIBROT 3","MULTIBROT 4","NEWTON") or tipo_fractal=="NOVA":
     cx=base_c.real; cy=base_c.imag
 else:
     cx=base_c.real+0.005*math.cos(t*3); cy=base_c.imag+0.005*math.sin(t*3)
 
-# PREVIEW 800x600 CACHEADO - ESTO EVITA EL OH NO
+# --- RENDER PRINCIPAL - UN SOLO st.image, SIN MARKDOWN HTML ---
 W,H=800,600
-img_preview = render_preview_cached(W,H,zoom,cx,cy,tipo_fractal,tam,brillo,tuple(colores_actuales),bg_tuple,umbral)
+img_raw = render_cached(W,H,zoom,cx,cy,tipo_fractal,tam,brillo,tuple(colores_actuales),bg_tuple,umbral,40)
 
 texto1=f"{nombre_cliente} {codigos}" if codigos.strip() else nombre_cliente
-texto2=FRACTALES[tipo_fractal]["formula"]+f" | C={cx:.4f}+{cy:.4f}i"
+texto2=FRACTALES[tipo_fractal]["formula"]
 
-# Mostrar
-st.image(img_preview, width=800)
 if presentar_etiqueta:
-    img_final=crear_imagen_con_etiqueta_abajo(img_preview, texto1, texto2)
+    img_show = crear_imagen_con_etiqueta_abajo(img_raw, texto1, texto2)
 else:
-    img_final=img_preview
+    img_show = img_raw
 
-st.markdown(f"""
-<div style="background:white;padding:8px 14px 10px 14px;border:1px solid #E5E5E5;border-top:none;margin-top:-4px;border-radius:0 0 10px 10px;max-width:800px">
-    <div style="color:black;font-weight:800;font-size:12px;">{texto1}</div>
-    <div style="color:#222;font-family:monospace;font-size:9px;margin-top:3px;">{texto2}</div>
-</div>
-""", unsafe_allow_html=True)
+# PLACEHOLDER UNICO - ESTO ARREGLA EL removeChild
+placeholder = st.empty()
+placeholder.image(img_show, width=800)
 
+# --- DESCARGAS ---
 with st.sidebar:
-    buf=io.BytesIO(); img_final.save(buf, format="PNG")
-    st.download_button("⬇️ PNG 800 con etiqueta mitad", buf.getvalue(), f"{nombre_cliente}_800_ETIQUETA.png", "image/png")
     st.divider()
-    st.write("**8K REAL - solo cuando lo necesites**")
-    if st.button("Generar 8K REAL 7680x6144"):
-        with st.spinner("Generando 8K... 25 seg"):
-            img_8k=render_preview_cached(7680,6144,zoom,cx,cy,tipo_fractal,tam,brillo,tuple(colores_actuales),bg_tuple,umbral)
+    buf=io.BytesIO(); img_show.save(buf, format="PNG")
+    st.download_button("⬇️ PNG con etiqueta mitad", buf.getvalue(), f"{nombre_cliente}_V105.png", "image/png", key="dl_png")
+
+    st.write("8K REAL - bajo demanda")
+    if st.button("Generar 8K REAL", key="btn_8k"):
+        with st.spinner("Generando 8K..."):
+            img_8k = render_cached(7680,6144,zoom,cx,cy,tipo_fractal,tam,brillo,tuple(colores_actuales),bg_tuple,umbral,60)
             if presentar_etiqueta:
-                img_8k=crear_imagen_con_etiqueta_abajo(img_8k,texto1,texto2)
-            buf8=io.BytesIO(); img_8k.save(buf8,format="PNG")
-            st.download_button("⬇️ PNG 8K REAL", buf8.getvalue(), f"{nombre_cliente}_8K.png", "image/png", key="8k")
+                img_8k = crear_imagen_con_etiqueta_abajo(img_8k, texto1, texto2)
+            buf8=io.BytesIO(); img_8k.save(buf8, format="PNG")
+            st.download_button("⬇️ PNG 8K REAL", buf8.getvalue(), f"{nombre_cliente}_8K.png", "image/png", key="dl_8k")
 
 st.divider()
-col1,col2=st.columns(2)
-with col1:
-    st.subheader("Animacion segura en nube")
-    num_frames=12 if "12" in anim_tipo else 60
-    if st.button(f"Generar {anim_tipo}"):
-        frames=[]; prog=st.progress(0)
-        it_steps=np.linspace(2,40,num_frames,dtype=int)
-        for idx,it in enumerate(it_steps):
-            # Truco: iteraciones variables para efecto crecimiento
-            # Reusamos cache variando brillo levemente para forzar recalculo con it
-            xs=np.linspace(-1.5/zoom,1.5/zoom,400)
-            ys=np.linspace(-1.0/zoom,1.0/zoom,300)
-            X,Y=np.meshgrid(xs,ys)
-            Z=X+1j*Y; c_var=complex(cx,cy)
-            for _ in range(int(it)): Z=Z*Z+c_var
-            s=(np.angle(Z)*0.22+np.log(np.abs(Z)+1)*tam)*0.375 % 1.0
-            palette=np.array([hex_to_rgb(c) for c in colores_actuales],float)
-            pos=s*6.0; i0=np.floor(pos).astype(int)%6; f=pos-np.floor(pos); f=0.5*(1-np.cos(f*np.pi))
-            out=np.zeros((300,400,3),float)
-            for k in range(6):
-                m=i0==k; nk=(k+1)%6
-                out[m,0]=(1-f[m])*palette[k,0]+f[m]*palette[nk,0]
-                out[m,1]=(1-f[m])*palette[k,1]+f[m]*palette[nk,1]
-                out[m,2]=(1-f[m])*palette[k,2]+f[m]*palette[nk,2]
-            out=np.clip(out*brillo,0,255)
-            out[np.abs(Z)>=4]=bg_tuple[:3] if len(bg_tuple)>=3 else (0,0,0)
-            frames.append(Image.fromarray(out.astype(np.uint8),"RGB"))
-            prog.progress((idx+1)/num_frames)
-        gif_buf=io.BytesIO()
-        frames[0].save(gif_buf,format="GIF",save_all=True,append_images=frames[1:],duration=120,loop=0,optimize=True)
-        st.image(frames[-1],width=400)
-        st.download_button("⬇️ Descargar GIF", gif_buf.getvalue(), f"{nombre_cliente}_{num_frames}frames.gif","image/gif")
+st.subheader("Animación 365 días")
+st.warning("El error removeChild salía al generar GIFs grandes en la nube. Usa modo 12 frames en la nube y 365 en local.")
 
-with col2:
-    st.subheader("365 dias - Generador LOCAL (evita Oh no)")
-    st.caption("Este no se puede generar en Streamlit Cloud porque lo corta a 60s")
+col_a, col_b = st.columns(2)
+with col_a:
+    if st.button("Generar GIF 12 frames - SI funciona en nube", key="gif12"):
+        frames=[]; prog=st.progress(0)
+        for i in range(12):
+            it=5+i*3
+            img_f=render_cached(400,300,zoom,cx,cy,tipo_fractal,tam,brillo,tuple(colores_actuales),bg_tuple,umbral,it)
+            frames.append(img_f.convert("RGB"))
+            prog.progress((i+1)/12)
+        gif_buf=io.BytesIO()
+        frames[0].save(gif_buf, format="GIF", save_all=True, append_images=frames[1:], duration=150, loop=0, optimize=True)
+        st.image(frames[-1], width=400)
+        st.download_button("⬇️ GIF 12 frames", gif_buf.getvalue(), "12frames.gif", "image/gif", key="dl_gif12")
+
+with col_b:
+    st.write("**365 días - Local**")
     st.download_button("⬇️ Descargar genera_365.py", f'''
 import numpy as np
 from PIL import Image
 import math
-W,H=400,300
-zoom={zoom}
-tam={tam}
-brillo={brillo}
-colores={colores_actuales}
-bg={bg_tuple[:3]}
-cx_base={FRACTALES[tipo_fractal]["c"].real}
-cy_base={FRACTALES[tipo_fractal]["c"].imag}
-tipo="{tipo_fractal}"
-
+W,H=400,300; zoom={zoom}; tam={tam}; brillo={brillo}
+colores={colores_actuales}; bg={bg_tuple[:3]}
 def hex_to_rgb(h):
-    h=h.lstrip('#')
-    return [int(h[0:2],16),int(h[2:4],16),int(h[4:6],16)]
-
+    h=h.lstrip('#'); return [int(h[0:2],16),int(h[2:4],16),int(h[4:6],16)]
 palette=np.array([hex_to_rgb(c) for c in colores],float)
 frames=[]
 for dia in range(1,366):
     t=dia/365*2*math.pi
-    if tipo in ("MANDELBROT","TRICORN","BURNING SHIP MANDELBROT","BUFFALO","CELTIC","MULTIBROT 3","MULTIBROT 4","NEWTON","NOVA"):
-        cx=cx_base; cy=cy_base
-    else:
-        cx=cx_base+0.005*math.cos(t*3); cy=cy_base+0.005*math.sin(t*3)
+    cx={FRACTALES[tipo_fractal]["c"].real}+0.005*math.cos(t*3)
+    cy={FRACTALES[tipo_fractal]["c"].imag}+0.005*math.sin(t*3)
     c_var=complex(cx,cy)
-    x=np.linspace(-1.5/zoom,1.5/zoom,W)
-    y=np.linspace(-1.0/zoom,1.0/zoom,H)
-    X,Y=np.meshgrid(x,y)
-    Z=X+1j*Y
+    x=np.linspace(-1.5/zoom,1.5/zoom,W); y=np.linspace(-1.0/zoom,1.0/zoom,H)
+    X,Y=np.meshgrid(x,y); Z=X+1j*Y
     for _ in range(30): Z=Z*Z+c_var
     s=(np.angle(Z)*0.22+np.log(np.abs(Z)+1)*tam)*0.375 % 1.0
     pos=s*6.0; i0=np.floor(pos).astype(int)%6; f=pos-np.floor(pos); f=0.5*(1-np.cos(f*np.pi))
     out=np.zeros((H,W,3),float)
     for k in range(6):
         m=i0==k; nk=(k+1)%6
-        out[m,0]=(1-f[m])*palette[k,0]+f[m]*palette[nk,0]
-        out[m,1]=(1-f[m])*palette[k,1]+f[m]*palette[nk,1]
-        out[m,2]=(1-f[m])*palette[k,2]+f[m]*palette[nk,2]
-    out=np.clip(out*brillo,0,255)
-    out[np.abs(Z)>=4]=bg
-    frames.append(Image.fromarray(out.astype(np.uint8),"RGB"))
-    print(f"{{dia}}/365")
-frames[0].save("365DIAS_{nombre_cliente}.gif", save_all=True, append_images=frames[1:], duration=80, loop=0, optimize=True)
-print("LISTO")
-'''.encode(), file_name="genera_365.py", mime="text/x-python")
+        out[m,0]=(1-f[m])*palette[k,0]+f[m]*palette[nk,0]; out[m,1]=(1-f[m])*palette[k,1]+f[m]*palette[nk,1]; out[m,2]=(1-f[m])*palette[k,2]+f[m]*palette[nk,2]
+    out=np.clip(out*brillo,0,255); out[np.abs(Z)>=4]=bg
+    frames.append(Image.fromarray(out.astype(np.uint8),"RGB")); print(dia)
+frames[0].save("365DIAS.gif", save_all=True, append_images=frames[1:], duration=80, loop=0, optimize=True)
+'''.encode(), file_name="genera_365.py", mime="text/x-python", key="dl_py365")
