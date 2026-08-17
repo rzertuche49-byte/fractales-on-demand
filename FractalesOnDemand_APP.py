@@ -3,7 +3,7 @@ import numpy as np
 from PIL import Image, ImageDraw, ImageFont
 import io, math
 
-st.set_page_config(layout="wide", page_title="Fractales On Demand V99.7 - 21 FRACTALES")
+st.set_page_config(layout="wide", page_title="Fractales On Demand V99.8 ETIQUETA UNICA")
 
 def hex_to_rgb(h):
     h=h.lstrip('#')
@@ -16,7 +16,42 @@ def get_font_mono(size):
     try: return ImageFont.truetype("DejaVuSansMono-Bold.ttf", size)
     except: return ImageFont.load_default()
 
-# MOTOR DE RENDER REAL POR BLOQUES
+# ETIQUETA ESTILO CAPTURA - CAJA BLANCA REDONDEADA
+def dibujar_etiqueta_captura(img, texto1, texto2, escala=1.0):
+    draw = ImageDraw.Draw(img, "RGBA")
+    W,H = img.size
+    # tamaño caja proporcional
+    pad_x = int(32*escala)
+    pad_y = int(22*escala)
+    font1 = get_font_bold(int(34*escala))
+    font2 = get_font_mono(int(24*escala))
+
+    # medir textos
+    try:
+        bbox1 = draw.textbbox((0,0), texto1, font=font1)
+        bbox2 = draw.textbbox((0,0), texto2, font=font2)
+        tw = max(bbox1[2]-bbox1[0], bbox2[2]-bbox2[0])
+        th = (bbox1[3]-bbox1[1]) + (bbox2[3]-bbox2[1]) + int(12*escala)
+    except:
+        tw = int(500*escala); th = int(60*escala)
+
+    # caja blanca abajo
+    box_w = W - int(20*escala)*2
+    box_h = th + pad_y*2
+    x0 = int(14*escala)
+    y0 = H - box_h - int(14*escala)
+    x1 = x0 + box_w
+    y1 = H - int(14*escala)
+
+    # fondo blanco redondeado
+    radius = int(18*escala)
+    draw.rounded_rectangle([x0,y0,x1,y1], radius=radius, fill=(255,255,255,255), outline=(230,230,230,255), width=int(1*escala))
+
+    # textos en negro
+    draw.text((x0+pad_x, y0+pad_y), texto1, fill=(0,0,0,255), font=font1)
+    draw.text((x0+pad_x, y0+pad_y+int(38*escala)), texto2, fill=(0,0,0,255), font=font2)
+    return img
+
 def render_block(W_chunk, H_chunk, X, Y, c_var, tipo, iter_base=60):
     if tipo == "MANDELBROT":
         C=(X-0.5)+1j*Y; Z=np.zeros_like(C)
@@ -69,7 +104,7 @@ def render_block(W_chunk, H_chunk, X, Y, c_var, tipo, iter_base=60):
         Z=X+1j*Y
         for _ in range(iter_base): Z=np.cos(Z)+c_var
         return Z
-    else: # TODA FAMILIA JULIA
+    else:
         Z=X+1j*Y
         if tipo=="BURNING SHIP JULIA":
             for _ in range(iter_base): Z=(np.abs(Z.real)+1j*np.abs(Z.imag))**2+c_var
@@ -77,7 +112,7 @@ def render_block(W_chunk, H_chunk, X, Y, c_var, tipo, iter_base=60):
             for _ in range(iter_base): Z=Z*Z+c_var
         return Z
 
-def render_fractal_true(W, H, zoom, c_var, tipo_fractal, colores_rgb, tam, brillo_val, bg_mode, bg_rgb, umbral):
+def render_fractal_true(W, H, zoom, c_var, tipo_fractal, colores_rgb, tam, brillo_val, bg_mode, bg_rgb, umbral, texto1, texto2, incluir):
     out_full = np.zeros((H, W, 3), dtype=np.uint8)
     mask_full = np.zeros((H, W), dtype=bool)
     ys = np.linspace(-1.0/zoom, 1.0/zoom, H)
@@ -100,16 +135,23 @@ def render_fractal_true(W, H, zoom, c_var, tipo_fractal, colores_rgb, tam, brill
         out_chunk = np.clip(out_chunk*brillo_val,0,255)
         brillo_pix = out_chunk.mean(axis=2)
         magnitud = np.abs(Z)
-        if tipo_fractal in ("NEWTON","NOVA"):
-            mask = brillo_pix > (10+umbral*10)
-        else:
-            mask = (magnitud<4) & (brillo_pix>(10+umbral*10))
+        mask = brillo_pix>(10+umbral*10) if tipo_fractal in ("NEWTON","NOVA") else (magnitud<4) & (brillo_pix>(10+umbral*10))
         if bg_mode!= "Transparente":
             bg_arr = np.zeros_like(out_chunk); bg_arr[:,:]=bg_rgb
             out_chunk = np.where(mask[:,:,None], out_chunk, bg_arr)
         out_full[y0:y1]=out_chunk.astype(np.uint8)
         mask_full[y0:y1]=mask
-    return out_full, mask_full
+
+    if bg_mode=="Transparente":
+        alpha_true = np.where(mask_full,255,0).astype(np.uint8)
+        img_true = Image.fromarray(np.dstack((out_full, alpha_true)), "RGBA")
+    else:
+        img_true = Image.fromarray(out_full, "RGB").convert("RGBA")
+
+    if incluir:
+        escala = W/1000
+        img_true = dibujar_etiqueta_captura(img_true, texto1, texto2, escala=escala)
+    return img_true
 
 PALETAS = {
     "Tu captura": ["#00FFFF","#0064FF","#FF00C8","#FF6400","#FFFF00","#00FF64"],
@@ -162,7 +204,7 @@ with st.sidebar:
     nombre_cliente = st.text_input("Nombre del cliente / proyecto", "ROBERTO ZERTUCHE")
     codigos = st.text_input("Codigos", "49/316/267")
     st.divider()
-    tipo_fractal = st.selectbox("TIPO DE FRACTAL (21)", list(FRACTALES.keys()), 0)
+    tipo_fractal = st.selectbox("TIPO DE FRACTAL (21)", list(FRACTALES.keys()), 8)
     dia = st.slider("DIA", 1, 365, 49)
     zoom = st.slider("ZOOM", 0.2, 5.0, 1.0)
     paleta_nombre = st.selectbox("PALETA", list(PALETAS.keys()), 0)
@@ -184,7 +226,7 @@ with st.sidebar:
     if fondo_mode == "Color de paleta":
         fondo_color_custom = st.color_picker("Elige color de fondo", base[0], key=f"bg_{paleta_nombre}")
     umbral = st.slider("Limpieza fondo", 0.0, 5.0, 1.0)
-    incluir = st.checkbox("Incrustar etiqueta en imagen", True)
+    incluir = st.checkbox("Incrustar etiqueta en imagen (estilo captura)", True)
     st.divider()
     calidad = st.slider("Calidad JPG", 80, 100, 95)
     render_real_8k = st.checkbox("Render 8K REAL para imprenta", value=True)
@@ -228,52 +270,26 @@ else:
 
 texto1=f"{nombre_cliente} {codigos}" if codigos.strip()!="" else nombre_cliente
 texto2=f"{tipo_fractal} | C={cx:.4f}+{cy:.4f}i | {FRACTALES[tipo_fractal]['formula']}"
+
+# APLICAR ETIQUETA UNICA ESTILO CAPTURA
 if incluir:
-    img_final=img_base.copy(); draw=ImageDraw.Draw(img_final)
-    es_oscuro = (bg_rgb[0]+bg_rgb[1]+bg_rgb[2])/3 < 128 if fondo_mode!="Transparente" else out[720:800,:].mean()<100
-    color=(255,255,255,255) if es_oscuro else (0,0,0,255)
-    font1=get_font_bold(36); font2=get_font_mono(26)
-    draw.text((24,H-50), texto1, fill=color, font=font1)
-    draw.text((24,H-22), texto2, fill=color, font=font2)
+    img_final = dibujar_etiqueta_captura(img_base.copy(), texto1, texto2, escala=1.0)
 else:
     img_final=img_base
 
+# SOLO IMAGEN, YA NO HAY SEGUNDA ETIQUETA
 st.image(img_final, width=1000)
-st.markdown(f"<div style='background:white;padding:14px 20px;border-radius:12px;border:1px solid #E0E0E0;'><b style='color:black;font-size:22px;'>{texto1}</b><br><span style='color:black;font-family:monospace;font-size:17px;'>{texto2}</span></div>", unsafe_allow_html=True)
 
 colores_rgb = [hex_to_rgb(c) for c in colores_actuales]
-def get_image_for_export(W, H, real=False):
-    if not real:
-        return img_final if (W==1000) else img_final.resize((W,H), Image.LANCZOS)
-    else:
-        out_true, mask_true = render_fractal_true(W, H, zoom, c_var, tipo_fractal, colores_rgb, tam, brillo, fondo_mode, bg_rgb, umbral)
-        if fondo_mode=="Transparente":
-            alpha_true = np.where(mask_true,255,0).astype(np.uint8)
-            img_true = Image.fromarray(np.dstack((out_true, alpha_true)), "RGBA")
-        else:
-            img_true = Image.fromarray(out_true, "RGB").convert("RGBA")
-        if incluir:
-            draw = ImageDraw.Draw(img_true); escala=W/1000
-            font1=get_font_bold(int(36*escala)); font2=get_font_mono(int(26*escala))
-            es_oscuro=(bg_rgb[0]+bg_rgb[1]+bg_rgb[2])/3 < 128 if fondo_mode!="Transparente" else out_true[int(H*0.9):,:].mean()<100
-            col=(255,255,255,255) if es_oscuro else (0,0,0,255)
-            draw.text((int(24*escala), H-int(50*escala)), texto1, fill=col, font=font1)
-            draw.text((int(24*escala), H-int(22*escala)), texto2, fill=col, font=font2)
-        return img_true
 
 with st.sidebar:
     buf=io.BytesIO(); img_final.save(buf, format="PNG")
-    st.download_button("PNG Standard 1000x800", buf.getvalue(), f"{nombre_cliente}_STD_{fondo_mode}.png", "image/png", key="png_std")
+    st.download_button("PNG Standard 1000x800 (con etiqueta captura)", buf.getvalue(), f"{nombre_cliente}_STD_{fondo_mode}.png", "image/png", key="png_std")
     if render_real_8k:
         if st.button("Generar 8K REAL NITIDO (2 min)", key="gen8k"):
-            img_e = get_image_for_export(7680,6144, real=True)
+            img_e = render_fractal_true(7680,6144, zoom, c_var, tipo_fractal, colores_rgb, tam, brillo, fondo_mode, bg_rgb, umbral, texto1, texto2, incluir)
             buf=io.BytesIO(); img_e.save(buf, format="PNG")
             st.download_button("⬇️ PNG 8K REAL", buf.getvalue(), f"{nombre_cliente}_8K_REAL_{fondo_mode}.png", "image/png", key="png_8k_real")
             buf2=io.BytesIO(); img_e.convert("RGB").save(buf2, format="PDF", resolution=300.0)
             st.download_button("⬇️ PDF 8K REAL 300dpi", buf2.getvalue(), f"{nombre_cliente}_8K_REAL_{fondo_mode}.pdf", "application/pdf", key="pdf_8k_real")
-            st.success(f"Fondo {fondo_mode} en 8K REAL sin pixeles")
-    else:
-        for W,H,label in [(3840,3072,"4K"), (7680,6144,"8K")]:
-            img_e=get_image_for_export(W,H, real=False)
-            buf=io.BytesIO(); img_e.save(buf, format="PNG")
-            st.download_button(f"PNG {label} {fondo_mode}", buf.getvalue(), f"{nombre_cliente}_{label}_{fondo_mode}.png", "image/png", key=f"png_{label}_{fondo_mode}")
+            
