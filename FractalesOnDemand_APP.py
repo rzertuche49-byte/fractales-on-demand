@@ -3,7 +3,7 @@ import numpy as np
 from PIL import Image, ImageDraw, ImageFont
 import io, math
 
-st.set_page_config(layout="wide", page_title="V98.2 - FIX")
+st.set_page_config(layout="wide", page_title="V98.3 FIX")
 
 def hex_to_rgb(h):
     h = h.lstrip('#')
@@ -54,7 +54,7 @@ FRACTALES = {
 }
 
 @st.cache_data(show_spinner=False)
-def render_fractal_cached(W, H, tipo_fractal, cx, cy, tam, brillo, palette_tuple, fondo_transparente, umbral, zoom):
+def render_base(W, H, tipo_fractal, cx, cy, tam, brillo, palette_tuple, fondo_transparente, umbral, zoom):
     c_var = complex(cx, cy)
     x = np.linspace(-1.5/zoom, 1.5/zoom, W)
     y = np.linspace(-1.0/zoom, 1.0/zoom, H)
@@ -124,33 +124,26 @@ es_fijo = tipo_fractal in ("MANDELBROT", "TRICORN", "NEWTON")
 if es_fijo: cx, cy = base_c.real, base_c.imag
 else: cx, cy = base_c.real + 0.005*math.cos(t*3), base_c.imag + 0.005*math.sin(t*3)
 
-# Preview rapido 1000x800
-img_base_preview, out_preview = render_fractal_cached(1000, 800, tipo_fractal, cx, cy, tam, brillo, tuple(colores_actuales), fondo_transparente, umbral, zoom)
+img_base_preview, out_preview = render_base(1000, 800, tipo_fractal, cx, cy, tam, brillo, tuple(colores_actuales), fondo_transparente, umbral, zoom)
 
 formula_txt=FRACTALES[tipo_fractal]["formula"]
 SEP_GRANDE = " | "
 SEP_NOMBRE = " "
-
-if codigos.strip()!="":
-    texto_linea1 = f"{nombre_cliente}{SEP_NOMBRE}{codigos}"
-else:
-    texto_linea1 = f"{nombre_cliente}"
+texto_linea1 = f"{nombre_cliente}{SEP_NOMBRE}{codigos}" if codigos.strip()!="" else f"{nombre_cliente}"
 texto_linea2 = f"{tipo_fractal}{SEP_GRANDE}C={cx:.4f}+{cy:.4f}i{SEP_GRANDE}{formula_txt}"
 
 def add_labels(img_base, out):
-    if incluir_etiqueta_en_imagen:
-        img_final=img_base.copy(); W,H=img_final.size; draw=ImageDraw.Draw(img_final)
-        muestra_inf=out[H-80:H,:].mean() if H>=80 else out.mean()
-        es_oscuro=muestra_inf<100
-        color_texto=(255,255,255,255) if es_oscuro else (0,0,0,255)
-        scale = W/1000
-        font1=get_font_bold(int(36*scale)); font2=get_font_mono(int(26*scale))
-        x0=int(24*scale); y1=H-int(50*scale); y2=H-int(22*scale)
-        draw.text((x0,y1),texto_linea1,fill=color_texto,font=font1)
-        draw.text((x0,y2),texto_linea2,fill=color_texto,font=font2)
-        return img_final
-    else:
-        return img_base
+    if not incluir_etiqueta_en_imagen: return img_base
+    img_final=img_base.copy(); W,H=img_final.size; draw=ImageDraw.Draw(img_final)
+    muestra_inf=out[H-80:H,:].mean() if H>=80 else out.mean()
+    es_oscuro=muestra_inf<100
+    color_texto=(255,255,255,255) if es_oscuro else (0,0,0,255)
+    scale = W/1000
+    font1=get_font_bold(int(36*scale)); font2=get_font_mono(int(26*scale))
+    x0=int(24*scale); y1=H-int(50*scale); y2=H-int(22*scale)
+    draw.text((x0,y1),texto_linea1,fill=color_texto,font=font1)
+    draw.text((x0,y2),texto_linea2,fill=color_texto,font=font2)
+    return img_final
 
 img_final_preview = add_labels(img_base_preview, out_preview)
 st.image(img_final_preview, width=1000)
@@ -163,36 +156,40 @@ st.markdown(f"""
 </div>
 """, unsafe_allow_html=True)
 
-# --- EXPORTACION CON KEYS UNICAS (FIX removeChild) ---
-st.sidebar.divider()
-st.sidebar.write(f"**Descargar {formato}**")
-
+# EXPORT SIN CRASHEAR
 if "8K" in formato: W_exp, H_exp = 7680, 6144
 elif "4K" in formato: W_exp, H_exp = 3840, 3072
 else: W_exp, H_exp = 1000, 800
 
-# Solo genera alta resolucion cuando se pide descargar
-with st.sidebar:
-    if st.button(f"Generar {formato} para descargar", key="btn_gen"):
-        st.session_state["gen_high"] = True
+st.sidebar.divider()
+st.sidebar.caption(f"Exporta {formato} (escalado profesional)")
 
-if st.session_state.get("gen_high", False):
-    with st.spinner(f"Generando {formato}..."):
-        img_base_high, out_high = render_fractal_cached(W_exp, H_exp, tipo_fractal, cx, cy, tam, brillo, tuple(colores_actuales), fondo_transparente, umbral, zoom)
-        img_export = add_labels(img_base_high, out_high)
+# Escalado inteligente - no recalcula fractal gigante
+def make_export():
+    # Si es Standard, ya lo tenemos
+    if W_exp == 1000:
+        return add_labels(img_base_preview, out_preview)
+    else:
+        # Upscale LANCZOS para 4K/8K
+        upscaled_base = img_base_preview.resize((W_exp, H_exp), Image.LANCZOS)
+        upscaled_out = out_preview # para referencia de brillo, no se necesita full res
+        # Para color texto, usamos el preview
+        # Creamos out falso escalado solo para que add_labels funcione
+        out_dummy = np.zeros((H_exp, W_exp), dtype=np.uint8)
+        # add_labels espera out.mean() - usamos preview mean
+        return add_labels(upscaled_base, out_preview)
 
-        buf_png = io.BytesIO(); img_export.save(buf_png, format="PNG")
-        st.download_button(f"📥 PNG {formato}", buf_png.getvalue(), f"{nombre_cliente.replace(' ','_')}_{tipo_fractal}_{W_exp}x{H_exp}.png", "image/png", key="dl_png", type="primary")
+img_export = make_export()
 
-        img_jpg = img_export.convert("RGB") if img_export.mode=="RGBA" else img_export
-        buf_jpg = io.BytesIO(); img_jpg.save(buf_jpg, format="JPEG", quality=calidad_jpg)
-        st.download_button(f"📥 JPG {formato}", buf_jpg.getvalue(), f"{nombre_cliente.replace(' ','_')}_{tipo_fractal}_{W_exp}x{H_exp}.jpg", "image/jpeg", key="dl_jpg")
+buf_png = io.BytesIO()
+img_export.save(buf_png, format="PNG")
+st.sidebar.download_button("📥 PNG", buf_png.getvalue(), f"{nombre_cliente.replace(' ','_')}_{tipo_fractal}_{W_exp}x{H_exp}.png", "image/png", key="dl_png_v98")
 
-        buf_pdf = io.BytesIO()
-        img_rgb = img_export.convert("RGB")
-        img_rgb.save(buf_pdf, format="PDF", resolution=300.0)
-        st.download_button(f"📥 PDF {formato} 300dpi", buf_pdf.getvalue(), f"{nombre_cliente.replace(' ','_')}_{tipo_fractal}_{W_exp}x{H_exp}.pdf", "application/pdf", key="dl_pdf")
-else:
-    # Descargas en standard sin generar 4K pesado
-    buf_png = io.BytesIO(); img_final_preview.save(buf_png, format="PNG")
-    st.sidebar.download_button("📥 PNG Standard", buf_png.getvalue(), f"{nombre_cliente.replace(' ','_')}_{tipo_fractal}_1000x800.png", "image/png", key="dl_png_std")
+img_jpg = img_export.convert("RGB")
+buf_jpg = io.BytesIO()
+img_jpg.save(buf_jpg, format="JPEG", quality=calidad_jpg)
+st.sidebar.download_button("📥 JPG", buf_jpg.getvalue(), f"{nombre_cliente.replace(' ','_')}_{tipo_fractal}_{W_exp}x{H_exp}.jpg", "image/jpeg", key="dl_jpg_v98")
+
+buf_pdf = io.BytesIO()
+img_jpg.save(buf_pdf, format="PDF", resolution=300.0)
+st.sidebar.download_button("📥 PDF 300dpi", buf_pdf.getvalue(), f"{nombre_cliente.replace(' ','_')}_{tipo_fractal}_{W_exp}x{H_exp}.pdf", "application/pdf", key="dl_pdf_v98")
