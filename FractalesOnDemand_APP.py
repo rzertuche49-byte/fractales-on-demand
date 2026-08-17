@@ -1,9 +1,9 @@
 import streamlit as st
 import numpy as np
-from PIL import Image, ImageDraw, ImageFont
+from PIL import Image, ImageDraw
 import io, math
 
-st.set_page_config(layout="wide", page_title="V88")
+st.set_page_config(layout="wide", page_title="V90")
 
 def hex_to_rgb(h):
     h = h.lstrip('#')
@@ -28,12 +28,26 @@ PALETAS = {
     "Matrix": ["#000000","#003B00","#008F11","#00FF41","#00FF00","#AAFF00"],
     "Desierto": ["#7F5539","#9C6644","#B08968","#DDB892","#E6CCB2","#EDE0D4"],
     "Joker": ["#3D087B","#5A189A","#7B2CBF","#9D4EDD","#C77DFF","#00F5D4"],
+    "Psicodelico": ["#FF00FF","#00FFFF","#FFFF00","#FF0000","#00FF00","#0000FF"],
+    "Elegante": ["#000000","#1A1A1A","#D4AF37","#F5F5DC","#8B7355","#FFFFFF"],
+}
+
+FRACTALES = {
+    "DENDRITE": {"c": complex(-0.745, 0.11), "formula": "Zn+1=Zn²+C"},
+    "RABBIT (Douady)": {"c": complex(-0.123, 0.745), "formula": "Zn+1=Zn²+C - Conejo"},
+    "SPIRAL": {"c": complex(-0.77568377, 0.13646737), "formula": "Zn+1=Zn²+C - Espiral"},
+    "SIEGEL DISK": {"c": complex(-0.391, -0.587), "formula": "Zn+1=Zn²+C - Siegel"},
+    "BURNING SHIP JULIA": {"c": complex(-0.5, -0.5), "formula": "Zn+1=(|Re|+i|Im|)²+C"},
+    "FEATHER / PLUMA": {"c": complex(-0.8, 0.156), "formula": "Zn+1=Zn²+C - Pluma"},
+    "MANDELBROT": {"c": complex(0,0), "formula": "Zn+1=Zn²+C con C=pixel - Mandelbrot Set"},
+    "TRICORN / MANDELBAR": {"c": complex(0,0), "formula": "Zn+1=conj(Zn)²+C - Tricorn"},
 }
 
 with st.sidebar:
     nombre_cliente = st.text_input("Nombre del cliente / proyecto", "FRACTALES ON DEMAND")
     firma = st.text_input("Firma", "© 2026")
     st.divider()
+    tipo_fractal = st.selectbox("TIPO DE FRACTAL", list(FRACTALES.keys()), index=0)
     dia = st.slider("DIA", 1, 365, 283)
     zoom = st.slider("ZOOM", 0.2, 5.0, 0.88)
     paleta_nombre = st.selectbox("PALETA", list(PALETAS.keys()), index=0)
@@ -52,22 +66,43 @@ with st.sidebar:
     st.divider()
     fondo_transparente = st.checkbox("Fondo transparente", value=False)
     umbral = st.slider("Limpieza fondo", 0.0, 5.0, 1.0)
-    st.divider()
-    incluir_etiqueta_en_imagen = st.checkbox("Incrustar nombre técnico en la imagen", value=True)
+    incluir_etiqueta_en_imagen = st.checkbox("Incrustar etiqueta en imagen", value=True)
 
 st.title(f"{nombre_cliente}")
 
-# Motor fractal
+# Motor
 t = dia/365*2*math.pi
-cx = -0.745 + 0.005*math.cos(t*3)
-cy = 0.11 + 0.005*math.sin(t*3)
-c = complex(cx, cy)
+base_c = FRACTALES[tipo_fractal]["c"]
+cx = base_c.real + 0.005*math.cos(t*3) if tipo_fractal not in ["MANDELBROT","TRICORN / MANDELBAR"] else base_c.real
+cy = base_c.imag + 0.005*math.sin(t*3) if tipo_fractal not in ["MANDELBROT","TRICORN / MANDELBAR"] else base_c.imag
+c_var = complex(cx, cy)
+
 x = np.linspace(-1.5/zoom, 1.5/zoom, 1000)
 y = np.linspace(-1.0/zoom, 1.0/zoom, 800)
 X,Y = np.meshgrid(x,y)
-Z = X+1j*Y
-for _ in range(80):
-    Z = Z*Z + c
+
+# Lógica por tipo
+if tipo_fractal in ["MANDELBROT","TRICORN / MANDELBAR"]:
+    # Mandelbrot: C = pixel, Z0=0
+    # Centramos Mandelbrot en -0.5,0
+    X_m = X - 0.5
+    C = X_m + 1j*Y
+    Z = np.zeros_like(C)
+    # Para zoom en Mandelbrot
+    for _ in range(80):
+        if tipo_fractal == "TRICORN / MANDELBAR":
+            Z = np.conj(Z)**2 + C
+        else:
+            Z = Z*Z + C
+else:
+    Z = X+1j*Y
+    if tipo_fractal == "BURNING SHIP JULIA":
+        for _ in range(80):
+            Z = (np.abs(Z.real) + 1j*np.abs(Z.imag))**2 + c_var
+    else:
+        for _ in range(80):
+            Z = Z*Z + c_var
+
 fase = np.angle(Z)*0.22 + np.log(np.abs(Z)+1)*tam
 s = (fase*0.375) % 1.0
 palette = np.array([hex_to_rgb(c) for c in colores_actuales], float)
@@ -84,50 +119,44 @@ for k in range(6):
     out[m,2] = (1-f[m])*palette[k,2] + f[m]*palette[nk,2]
 out = np.clip(out*brillo,0,255).astype(np.uint8)
 
-# Transparencia base
 magnitud = np.abs(Z)
 brillo_pixel = out.mean(axis=2)
 if fondo_transparente:
     alpha = np.where((magnitud < 4) & (brillo_pixel > (10 + umbral*10)), 255, 0).astype(np.uint8)
-    out_rgba = np.dstack((out, alpha))
-    img_base = Image.fromarray(out_rgba, "RGBA")
+    img_base = Image.fromarray(np.dstack((out, alpha)), "RGBA")
 else:
     img_base = Image.fromarray(out, "RGB").convert("RGBA")
 
-# --- NUEVO: INCRUSTAR ETIQUETA EN LA BASE DE LA IMAGEN ---
+formula_txt = FRACTALES[tipo_fractal]["formula"]
+
 if incluir_etiqueta_en_imagen:
     W,H = img_base.size
-    etiqueta_h = 55
+    etiqueta_h = 60
     nueva = Image.new("RGBA", (W, H+etiqueta_h), (0,0,0,0) if fondo_transparente else (0,0,0,255))
     nueva.paste(img_base, (0,0))
     draw = ImageDraw.Draw(nueva)
-    # fondo etiqueta negro
     draw.rectangle([(0,H),(W,H+etiqueta_h)], fill=(17,17,17,255))
-    # linea de color
     try:
         rgb_c1 = hex_to_rgb(c1)
         draw.rectangle([(0,H),(8,H+etiqueta_h)], fill=tuple(rgb_c1)+(255,))
     except: pass
-    texto = f"{nombre_cliente} | {firma} | JULIA SET - DENDRITE | C={cx:.4f}+{cy:.4f}i | {paleta_nombre}"
-    # fuente por defecto
-    draw.text((18, H+8), texto, fill=(255,255,255,255))
-    draw.text((18, H+28), f"Zn+1 = Zn^2 + C | DIA {dia} | Escape-Time Fractal", fill=(170,170,170,255))
+    draw.text((18, H+8), f"{nombre_cliente} | {firma} | {tipo_fractal} | C={cx:.4f}+{cy:.4f}i", fill=(255,255,255,255))
+    draw.text((18, H+32), f"{formula_txt} | DIA {dia}", fill=(170,170,170,255))
     img_final = nueva
 else:
     img_final = img_base
 
 st.image(img_final, use_container_width=True)
 
-# Etiqueta visual en la web (igual que antes)
 st.markdown(f"""
 <div style="background:#111; padding:12px; border-radius:10px; border-left:5px solid {c1}">
-<b style="color:white;">{nombre_cliente} | {firma}</b><br>
+<b style="color:white;">{nombre_cliente} | {tipo_fractal}</b><br>
 <span style="color:#AAA; font-family:monospace; font-size:12px;">
-JULIA SET - DENDRITE | Fórmula: Z(n+1)=Z(n)²+C | C={cx:.4f}+{cy:.4f}i | DIA {dia} | Paleta: {paleta_nombre}
+{formula_txt} | Paleta: {paleta_nombre}
 </span>
 </div>
 """, unsafe_allow_html=True)
 
 buf = io.BytesIO()
 img_final.save(buf, format="PNG")
-st.sidebar.download_button("📥 Descargar PNG con etiqueta", buf.getvalue(), f"{nombre_cliente.replace(' ','_')}_JULIA.png", "image/png", type="primary")
+st.sidebar.download_button("📥 Descargar PNG", buf.getvalue(), f"{nombre_cliente.replace(' ','_')}_{tipo_fractal}.png", "image/png", type="primary")
