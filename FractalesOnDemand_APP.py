@@ -1,13 +1,24 @@
 import streamlit as st
 import numpy as np
 from PIL import Image, ImageDraw, ImageFont
-import io, math
+import io, math, os
 
-st.set_page_config(layout="wide", page_title="V95")
+st.set_page_config(layout="wide", page_title="V96")
 
 def hex_to_rgb(h):
     h = h.lstrip('#')
     return [int(h[0:2],16), int(h[2:4],16), int(h[4:6],16)]
+
+def get_font(size):
+    # Intenta cargar una fuente grande, si no usa la default
+    try:
+        # DejaVu viene en casi todos los servers
+        return ImageFont.truetype("DejaVuSans-Bold.ttf", size)
+    except:
+        try:
+            return ImageFont.truetype("DejaVuSans.ttf", size)
+        except:
+            return ImageFont.load_default()
 
 PALETAS = {
     "Tu captura": ["#00FFFF","#0064FF","#FF00C8","#FF6400","#FFFF00","#00FF64"],
@@ -118,56 +129,7 @@ else:
 
 formula_txt = FRACTALES[tipo_fractal]["formula"]
 
-# ORDEN QUE PEDISTE
 if codigos.strip()!= "":
     texto_linea1 = f"{nombre_cliente} | {codigos}"
 else:
-    texto_linea1 = f"{nombre_cliente}"
-texto_linea2 = f"{tipo_fractal} | C={cx:.4f}+{cy:.4f}i | {formula_txt}"
-
-# --- ETIQUETA INTEGRADA AL FONDO ---
-if incluir_etiqueta_en_imagen:
-    img_final = img_base.copy()
-    W,H = img_final.size
-    draw = ImageDraw.Draw(img_final)
-
-    # Detecta si el fondo abajo es oscuro o claro para elegir color de texto
-    # Tomamos el promedio de brillo de la franja inferior
-    muestra_inf = out[H-80:H, :].mean() if H>=80 else out.mean()
-    es_oscuro = muestra_inf < 90 # si es oscuro, texto blanco
-
-    if es_oscuro:
-        color_texto = (255,255,255,255)
-        color_sombra = (0,0,0,180)
-    else:
-        color_texto = (0,0,0,255)
-        color_sombra = (255,255,255,180)
-
-    # Sombra para legibilidad + texto
-    x0, y1, y2 = 20, H-48, H-26
-    # sombra
-    draw.text((x0+1, y1+1), texto_linea1, fill=color_sombra)
-    draw.text((x0+1, y2+1), texto_linea2, fill=color_sombra)
-    # texto principal
-    draw.text((x0, y1), texto_linea1, fill=color_texto)
-    draw.text((x0, y2), texto_linea2, fill=color_texto)
-else:
-    img_final = img_base
-
-st.image(img_final, use_container_width=True)
-
-# Franja de abajo repite lo mismo, también con fondo oscuro/claro
-muestra_inf = out[-80:,:].mean()
-es_oscuro_web = muestra_inf < 90
-bg_web = "#111" if es_oscuro_web else "white"
-col_web = "white" if es_oscuro_web else "black"
-
-st.markdown(f"""
-<div style="background:{bg_web}; padding:12px 14px; border-radius:8px; border:1px solid #DDD;">
-<b style="color:{col_web}; font-size:16px;">{texto_linea1}</b><br>
-<span style="color:{col_web}; font-family:monospace; font-size:13px;">{texto_linea2}</span>
-</div>
-""", unsafe_allow_html=True)
-
-buf = io.BytesIO(); img_final.save(buf, format="PNG")
-st.sidebar.download_button("📥 Descargar PNG", buf.getvalue(), f"{nombre_cliente.replace(' ','_')}_{tipo_fractal}.png", "image/png", type="primary")
+    texto_linea1 =
