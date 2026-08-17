@@ -3,7 +3,7 @@ import numpy as np
 from PIL import Image, ImageDraw, ImageFont
 import io, math
 
-st.set_page_config(layout="wide", page_title="V97.1")
+st.set_page_config(layout="wide", page_title="V97.2")
 
 def hex_to_rgb(h):
     h = h.lstrip('#')
@@ -124,27 +124,37 @@ if fondo_transparente:
 else: img_base=Image.fromarray(out,"RGB").convert("RGBA")
 
 formula_txt=FRACTALES[tipo_fractal]["formula"]
-texto_linea1=f"{nombre_cliente} | {codigos}" if codigos.strip()!="" else f"{nombre_cliente}"
-texto_linea2=f"{tipo_fractal} | C={cx:.4f}+{cy:.4f}i | {formula_txt}"
+
+# --- AJUSTE QUE PEDISTE: MAS AIRE ALREDEDOR DEL | ---
+SEP = " | " # 3 espacios antes y despues
+if codigos.strip()!="":
+    texto_linea1 = f"{nombre_cliente}{SEP}{codigos}"
+else:
+    texto_linea1 = f"{nombre_cliente}"
+texto_linea2 = f"{tipo_fractal}{SEP}C={cx:.4f}+{cy:.4f}i{SEP}{formula_txt}"
 
 if incluir_etiqueta_en_imagen:
     img_final=img_base.copy(); W,H=img_final.size; draw=ImageDraw.Draw(img_final)
     muestra_inf=out[H-80:H,:].mean() if H>=80 else out.mean()
     es_oscuro=muestra_inf<100
     color_texto=(255,255,255,255) if es_oscuro else (0,0,0,255)
-    # Tipografia mas grande para compensar el escalado del navegador
-    font1=get_font_bold(42)
-    font2=get_font_mono(30)
-    x0=24; y1=H-72; y2=H-30
+    font1=get_font_bold(36)
+    font2=get_font_mono(26)
+    x0=24
+    # REDUCCION DE DISTANCIA VERTICAL - FLECHA ROJA
+    y1=H-52
+    y2=H-22 # solo 30px de separacion, antes 42px
     draw.text((x0,y1),texto_linea1,fill=color_texto,font=font1)
     draw.text((x0,y2),texto_linea2,fill=color_texto,font=font2)
 else: img_final=img_base
 
-st.image(img_final, use_container_width=False, width=1000) # Sin estirar, para que no se vea borrosa
+st.image(img_final, use_container_width=False, width=1000)
 
+# Etiqueta 2 siempre blanca, mismo SEP
 st.markdown(f"""
-<div style="background:white; padding:18px 20px; border-radius:12px; border:1px solid #E0E0E0;">
-<b style="color:black; font-size:22px; font-family:DejaVu Sans, Arial, sans-serif; font-weight:800;">{texto_linea1}</b><br>
+<div style="background:white; padding:14px 20px; border-radius:12px; border:1px solid #E0E0E0; line-height:1.15;">
+<b style="color:black; font-size:22px; font-family:DejaVu Sans, Arial, sans-serif; font-weight:800; letter-spacing:0.2px;">{texto_linea1}</b><br>
+<div style="height:6px;"></div>
 <span style="color:black; font-family:DejaVu Sans Mono, monospace; font-size:17px;">{texto_linea2}</span>
 </div>
 """, unsafe_allow_html=True)
