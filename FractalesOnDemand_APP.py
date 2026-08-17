@@ -3,29 +3,40 @@ import numpy as np
 from PIL import Image
 import io, math
 
-st.set_page_config(layout="wide", page_title="V86 Personalizado")
-
-PALETAS = {
-    "Tu captura": ["#00FFFF","#0064FF","#FF00C8","#FF6400","#FFFF00","#00FF64"],
-    "Neon 80s": ["#00FFFF","#FF00FF","#FFFF00","#00FF00","#FF0066","#6600FF"],
-    "Cyberpunk": ["#FF003C","#00F0FF","#F0FF00","#FF00F0","#00FF9F","#7000FF"],
-    "Toxic": ["#00FF00","#CCFF00","#00FFCC","#FFFF00","#FF00FF","#00FFFF"],
-    "Miami Vice": ["#FF6BEC","#3EFFE2","#FFD93D","#FF6B6B","#6BCB77","#4D96FF"],
-}
+st.set_page_config(layout="wide", page_title="V87")
 
 def hex_to_rgb(h):
     h = h.lstrip('#')
     return [int(h[0:2],16), int(h[2:4],16), int(h[4:6],16)]
 
-with st.sidebar:
-    st.write("👤 **PERSONALIZACIÓN CLIENTE**")
-    nombre_cliente = st.text_input("Nombre del cliente / proyecto", "FRACTALES ON DEMAND")
-    firma = st.text_input("Firma portafolio", "© 2026")
+PALETAS = {
+    "Tu captura": ["#00FFFF","#0064FF","#FF00C8","#FF6400","#FFFF00","#00FF64"],
+    "Neon 80s": ["#00FFFF","#FF00FF","#FFFF00","#00FF00","#FF0066","#6600FF"],
+    "Fuego": ["#FF0000","#FF6600","#FFCC00","#FF3300","#CC0000","#FF9900"],
+    "Oceano Profundo": ["#001F54","#034078","#1282A2","#00B4D8","#90E0EF","#CAF0F8"],
+    "Pastel Dream": ["#FFB5E8","#B5DEFF","#C3FF99","#FFF5BA","#FFC9DE","#D1BDFF"],
+    "Sunset": ["#F72585","#7209B7","#3A0CA3","#4361EE","#4CC9F0","#FFBE0B"],
+    "Galaxy": ["#0B0C10","#1F2833","#45A29E","#66FCF1","#C5C6C7","#9D00FF"],
+    "Toxic": ["#00FF00","#CCFF00","#00FFCC","#FFFF00","#FF00FF","#00FFFF"],
+    "Candy": ["#FF70A6","#FF9770","#FFD670","#E9FF70","#70FFB2","#70D6FF"],
+    "Bosque": ["#0A2F0A","#1B5E20","#2E7D32","#66BB6A","#A5D6A7","#C8E6C9"],
+    "Volcan": ["#000000","#4A0000","#8B0000","#FF4500","#FF8C00","#FFD700"],
+    "Aurora": ["#03045E","#0077B6","#00B4D8","#90E0EF","#ADE8F4","#CAF0F8"],
+    "Miami Vice": ["#FF6BEC","#3EFFE2","#FFD93D","#FF6B6B","#6BCB77","#4D96FF"],
+    "Cyberpunk": ["#FF003C","#00F0FF","#F0FF00","#FF00F0","#00FF9F","#7000FF"],
+    "Helado": ["#FEC8D8","#FFDFD3","#FFF0B5","#D0F4DE","#A9DEF9","#E4C1F9"],
+    "Matrix": ["#000000","#003B00","#008F11","#00FF41","#00FF00","#AAFF00"],
+    "Desierto": ["#7F5539","#9C6644","#B08968","#DDB892","#E6CCB2","#EDE0D4"],
+    "Joker": ["#3D087B","#5A189A","#7B2CBF","#9D4EDD","#C77DFF","#00F5D4"],
+}
 
+with st.sidebar:
+    nombre_cliente = st.text_input("Nombre del cliente / proyecto", "FRACTALES ON DEMAND")
+    firma = st.text_input("Firma", "© 2026")
     st.divider()
     dia = st.slider("DIA", 1, 365, 283)
     zoom = st.slider("ZOOM", 0.2, 5.0, 0.88)
-    paleta_nombre = st.selectbox("PALETA BASE", list(PALETAS.keys()), index=0)
+    paleta_nombre = st.selectbox("PALETA", list(PALETAS.keys()), index=0)
     base = PALETAS[paleta_nombre]
     st.write("**EDITA 6 COLORES**")
     c1 = st.color_picker("Color 1", base[0])
@@ -39,14 +50,13 @@ with st.sidebar:
     tam = st.slider("Tamaño mancha", 0.1, 3.0, 1.8)
     brillo = st.slider("Brillo", 0.5, 2.5, 1.4)
     st.divider()
-    fondo_transparente = st.checkbox("Fondo transparente PNG", value=False)
+    fondo_transparente = st.checkbox("Fondo transparente", value=False)
     umbral = st.slider("Limpieza fondo", 0.0, 5.0, 1.0)
 
-# TITULO DINAMICO CON NOMBRE DEL CLIENTE
-st.title(f"{nombre_cliente} - JULIA SET")
-st.caption(f"Proyecto personalizado para {nombre_cliente}")
+# TITULO SOLO CON NOMBRE CLIENTE - SIN JULIA SET
+st.title(f"{nombre_cliente}")
 
-# Motor fractal
+# Motor
 t = dia/365*2*math.pi
 cx = -0.745 + 0.005*math.cos(t*3)
 cy = 0.11 + 0.005*math.sin(t*3)
@@ -84,20 +94,16 @@ else:
     img_final = Image.fromarray(out, "RGB")
     st.image(out, use_container_width=True)
 
+# Etiqueta tecnica abajo SI se queda
 st.markdown(f"""
-<div style="background:#111; padding:15px; border-radius:10px; border-left:5px solid {c1}">
-<b style="color:white; font-size:18px;">{nombre_cliente} | {firma} | JULIA SET - DENDRITE</b><br>
-<span style="color:#AAA; font-family:monospace; font-size:13px;">
-Fórmula: Z(n+1) = Z(n)² + C | C = {cx:.4f} + {cy:.4f}i | DIA: {dia} | ZOOM: {zoom}x<br>
-Paleta: {paleta_nombre} | Modo: {'TRANSPARENTE' if fondo_transparente else 'SOLIDO'}
+<div style="background:#111; padding:12px; border-radius:10px; border-left:5px solid {c1}">
+<b style="color:white;">{nombre_cliente} | {firma}</b><br>
+<span style="color:#AAA; font-family:monospace; font-size:12px;">
+Fórmula: Z(n+1)=Z(n)²+C | C={cx:.4f}+{cy:.4f}i | DIA {dia} | Paleta: {paleta_nombre}
 </span>
 </div>
 """, unsafe_allow_html=True)
 
-col1, col2 = st.columns(2)
-with col1:
-    st.success(f"Listo para entregar a: {nombre_cliente}")
-with col2:
-    buf = io.BytesIO()
-    img_final.save(buf, format="PNG")
-    st.download_button(f"📥 Descargar para {nombre_cliente}", buf.getvalue(), f"fractal_{nombre_cliente.replace(' ','_')}.png", "image/png", type="primary", use_container_width=True)
+buf = io.BytesIO()
+img_final.save(buf, format="PNG")
+st.sidebar.download_button("📥 Descargar PNG", buf.getvalue(), f"{nombre_cliente.replace(' ','_')}.png", "image/png", type="primary")
