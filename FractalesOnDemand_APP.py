@@ -3,7 +3,7 @@ import numpy as np
 from PIL import Image, ImageDraw, ImageFont
 import io, math
 
-st.set_page_config(layout="wide", page_title="Fractales On Demand V99.6 FONDO")
+st.set_page_config(layout="wide", page_title="Fractales On Demand V99.7 - 21 FRACTALES")
 
 def hex_to_rgb(h):
     h=h.lstrip('#')
@@ -12,10 +12,70 @@ def hex_to_rgb(h):
 def get_font_bold(size):
     try: return ImageFont.truetype("DejaVuSans-Bold.ttf", size)
     except: return ImageFont.load_default()
-
 def get_font_mono(size):
     try: return ImageFont.truetype("DejaVuSansMono-Bold.ttf", size)
     except: return ImageFont.load_default()
+
+# MOTOR DE RENDER REAL POR BLOQUES
+def render_block(W_chunk, H_chunk, X, Y, c_var, tipo, iter_base=60):
+    if tipo == "MANDELBROT":
+        C=(X-0.5)+1j*Y; Z=np.zeros_like(C)
+        for _ in range(iter_base): Z=Z*Z+C
+        return Z
+    elif tipo == "TRICORN":
+        C=(X-0.5)+1j*Y; Z=np.zeros_like(C)
+        for _ in range(iter_base): Z=np.conj(Z)**2+C
+        return Z
+    elif tipo == "BURNING SHIP MANDELBROT":
+        C=(X-0.5)+1j*Y; Z=np.zeros_like(C)
+        for _ in range(iter_base): Z=(np.abs(Z.real)+1j*np.abs(Z.imag))**2+C
+        return Z
+    elif tipo == "BUFFALO":
+        C=(X-0.5)+1j*Y; Z=np.zeros_like(C)
+        for _ in range(iter_base):
+            ZR = np.abs(Z.real); ZI = np.abs(Z.imag)
+            Z = (ZR*ZR - ZI*ZI) + 2*ZR*ZI*1j + C
+        return Z
+    elif tipo == "CELTIC":
+        C=(X-0.5)+1j*Y; Z=np.zeros_like(C)
+        for _ in range(iter_base):
+            Z2 = Z*Z
+            Z = np.abs(Z2.real) + 1j*Z2.imag + C
+        return Z
+    elif tipo == "MULTIBROT 3":
+        C=(X-0.5)+1j*Y; Z=np.zeros_like(C)
+        for _ in range(iter_base): Z=Z**3+C
+        return Z
+    elif tipo == "MULTIBROT 4":
+        C=(X-0.5)+1j*Y; Z=np.zeros_like(C)
+        for _ in range(iter_base): Z=Z**4+C
+        return Z
+    elif tipo == "NEWTON":
+        Z=X+1j*Y
+        for _ in range(20):
+            Z2=Z*Z; Z3=Z2*Z; d=np.where(np.abs(3*Z2)<1e-6,1e-6,3*Z2); Z=Z-(Z3-1)/d
+        return Z
+    elif tipo == "NOVA":
+        Z=X+1j*Y
+        for _ in range(40):
+            Z2=Z*Z; Z3=Z2*Z; d=np.where(np.abs(3*Z2)<1e-6,1e-6,3*Z2)
+            Z=Z-(Z3-1)/d + c_var
+        return Z
+    elif tipo == "SINE":
+        Z=X+1j*Y
+        for _ in range(iter_base): Z=np.sin(Z)+c_var
+        return Z
+    elif tipo == "COSINE":
+        Z=X+1j*Y
+        for _ in range(iter_base): Z=np.cos(Z)+c_var
+        return Z
+    else: # TODA FAMILIA JULIA
+        Z=X+1j*Y
+        if tipo=="BURNING SHIP JULIA":
+            for _ in range(iter_base): Z=(np.abs(Z.real)+1j*np.abs(Z.imag))**2+c_var
+        else:
+            for _ in range(iter_base): Z=Z*Z+c_var
+        return Z
 
 def render_fractal_true(W, H, zoom, c_var, tipo_fractal, colores_rgb, tam, brillo_val, bg_mode, bg_rgb, umbral):
     out_full = np.zeros((H, W, 3), dtype=np.uint8)
@@ -28,23 +88,8 @@ def render_fractal_true(W, H, zoom, c_var, tipo_fractal, colores_rgb, tam, brill
         y1 = min(y0+CHUNK, H)
         y_chunk = ys[y0:y1]
         X, Y = np.meshgrid(xs, y_chunk)
-        if tipo_fractal=="MANDELBROT":
-            C=(X-0.5)+1j*Y; Z=np.zeros_like(C)
-            for _ in range(60): Z=Z*Z+C
-        elif tipo_fractal=="TRICORN":
-            C=(X-0.5)+1j*Y; Z=np.zeros_like(C)
-            for _ in range(60): Z=np.conj(Z)**2+C
-        elif tipo_fractal=="NEWTON":
-            Z=X+1j*Y
-            for _ in range(20):
-                Z2=Z*Z; Z3=Z2*Z; d=np.where(np.abs(3*Z2)<1e-6,1e-6,3*Z2); Z=Z-(Z3-1)/d
-        else:
-            Z=X+1j*Y
-            if tipo_fractal=="BURNING SHIP JULIA":
-                for _ in range(60): Z=(np.abs(Z.real)+1j*np.abs(Z.imag))**2+c_var
-            else:
-                for _ in range(60): Z=Z*Z+c_var
-        s=(np.angle(Z)+np.pi)/(2*np.pi) if tipo_fractal=="NEWTON" else (np.angle(Z)*0.22+np.log(np.abs(Z)+1)*tam)*0.375 % 1.0
+        Z = render_block(W, y1-y0, X, Y, c_var, tipo_fractal)
+        s=(np.angle(Z)+np.pi)/(2*np.pi) if tipo_fractal in ("NEWTON","NOVA") else (np.angle(Z)*0.22+np.log(np.abs(Z)+1)*tam)*0.375 % 1.0
         pos=s*6.0; i0=np.floor(pos).astype(int)%6; f=pos-np.floor(pos); f=0.5*(1-np.cos(f*np.pi))
         out_chunk = np.zeros((y1-y0, W, 3), float)
         for k in range(6):
@@ -55,17 +100,15 @@ def render_fractal_true(W, H, zoom, c_var, tipo_fractal, colores_rgb, tam, brill
         out_chunk = np.clip(out_chunk*brillo_val,0,255)
         brillo_pix = out_chunk.mean(axis=2)
         magnitud = np.abs(Z)
-        if tipo_fractal=="NEWTON":
+        if tipo_fractal in ("NEWTON","NOVA"):
             mask = brillo_pix > (10+umbral*10)
         else:
             mask = (magnitud<4) & (brillo_pix>(10+umbral*10))
-        # aplicar fondo
         if bg_mode!= "Transparente":
-            bg_arr = np.zeros_like(out_chunk)
-            bg_arr[:,:] = bg_rgb
+            bg_arr = np.zeros_like(out_chunk); bg_arr[:,:]=bg_rgb
             out_chunk = np.where(mask[:,:,None], out_chunk, bg_arr)
-        out_full[y0:y1] = out_chunk.astype(np.uint8)
-        mask_full[y0:y1] = mask
+        out_full[y0:y1]=out_chunk.astype(np.uint8)
+        mask_full[y0:y1]=mask
     return out_full, mask_full
 
 PALETAS = {
@@ -91,22 +134,35 @@ PALETAS = {
     "Elegante": ["#000000","#1A1A1A","#D4AF37","#F5F5DC","#8B7355","#FFFFFF"],
 }
 FRACTALES = {
-    "DENDRITE": {"c": complex(-0.745, 0.11), "formula": "Zn+1=Zn2+C"},
     "RABBIT": {"c": complex(-0.123, 0.745), "formula": "Zn+1=Zn2+C"},
+    "DENDRITE": {"c": complex(-0.745, 0.11), "formula": "Zn+1=Zn2+C"},
     "SPIRAL": {"c": complex(-0.77568377, 0.13646737), "formula": "Zn+1=Zn2+C"},
     "SIEGEL DISK": {"c": complex(-0.391, -0.587), "formula": "Zn+1=Zn2+C"},
-    "BURNING SHIP JULIA": {"c": complex(-0.5, -0.5), "formula": "Zn+1=(|Re|+i|Im|)2+C"},
     "FEATHER": {"c": complex(-0.8, 0.156), "formula": "Zn+1=Zn2+C"},
+    "DOUADY RABBIT V2": {"c": complex(-0.12256, 0.74486), "formula": "Zn+1=Zn2+C"},
+    "SAN MARCO DRAGON": {"c": complex(-0.75, 0.0), "formula": "Zn+1=Zn2+C"},
+    "HORSESHOE": {"c": complex(-0.74543, 0.11301), "formula": "Zn+1=Zn2+C"},
+    "HEART": {"c": complex(-0.1, 0.651), "formula": "Zn+1=Zn2+C"},
+    "DOUBLE SPIRAL": {"c": complex(-0.5251993, 0.5251993), "formula": "Zn+1=Zn2+C"},
+    "BURNING SHIP JULIA": {"c": complex(-0.5, -0.5), "formula": "Zn+1=(|Re|+i|Im|)2+C"},
     "MANDELBROT": {"c": complex(0,0), "formula": "Zn+1=Zn2+C"},
     "TRICORN": {"c": complex(0,0), "formula": "Zn+1=conj(Zn)2+C"},
-    "NEWTON": {"c": complex(0,0), "formula": "Zn+1=Zn-(Zn3-1)/3Zn2"},
+    "BURNING SHIP MANDELBROT": {"c": complex(0,0), "formula": "Zn+1=(|Re|+i|Im|)2+C"},
+    "BUFFALO": {"c": complex(0,0), "formula": "Zn+1=|Zn|2+C"},
+    "CELTIC": {"c": complex(0,0), "formula": "Zn+1=|Re(Z2)|+i*Im(Z2)+C"},
+    "MULTIBROT 3": {"c": complex(0,0), "formula": "Zn+1=Zn3+C"},
+    "MULTIBROT 4": {"c": complex(0,0), "formula": "Zn+1=Zn4+C"},
+    "NEWTON": {"c": complex(0,0), "formula": "Zn+1=Zn-(Z3-1)/3Z2"},
+    "NOVA": {"c": complex(-0.5, 0.0), "formula": "Zn+1=NOVA(Zn)+C"},
+    "SINE": {"c": complex(0.5, 0.5), "formula": "Zn+1=sin(Zn)+C"},
+    "COSINE": {"c": complex(0.5, 0.5), "formula": "Zn+1=cos(Zn)+C"},
 }
 
 with st.sidebar:
     nombre_cliente = st.text_input("Nombre del cliente / proyecto", "ROBERTO ZERTUCHE")
     codigos = st.text_input("Codigos", "49/316/267")
     st.divider()
-    tipo_fractal = st.selectbox("TIPO DE FRACTAL", list(FRACTALES.keys()), 1)
+    tipo_fractal = st.selectbox("TIPO DE FRACTAL (21)", list(FRACTALES.keys()), 0)
     dia = st.slider("DIA", 1, 365, 49)
     zoom = st.slider("ZOOM", 0.2, 5.0, 1.0)
     paleta_nombre = st.selectbox("PALETA", list(PALETAS.keys()), 0)
@@ -123,7 +179,6 @@ with st.sidebar:
     tam = st.slider("Tamano mancha", 0.1, 3.0, 1.8)
     brillo = st.slider("Brillo", 0.5, 2.5, 1.4)
     st.divider()
-    # NUEVA VARIABLE DE FONDO
     fondo_mode = st.selectbox("FONDO", ["Negro", "Blanco", "Transparente", "Color de paleta"], 0)
     fondo_color_custom = "#FF00C8"
     if fondo_mode == "Color de paleta":
@@ -132,10 +187,8 @@ with st.sidebar:
     incluir = st.checkbox("Incrustar etiqueta en imagen", True)
     st.divider()
     calidad = st.slider("Calidad JPG", 80, 100, 95)
-    render_real_8k = st.checkbox("Render 8K REAL para imprenta (nitido)", value=True)
-    st.write("**GUARDAR - SIN PIXELES**")
+    render_real_8k = st.checkbox("Render 8K REAL para imprenta", value=True)
 
-# config fondo
 if fondo_mode == "Negro": bg_rgb = [0,0,0]
 elif fondo_mode == "Blanco": bg_rgb = [255,255,255]
 elif fondo_mode == "Transparente": bg_rgb = [0,0,0]
@@ -143,32 +196,17 @@ else: bg_rgb = hex_to_rgb(fondo_color_custom)
 
 t=dia/365*2*math.pi
 base_c=FRACTALES[tipo_fractal]["c"]
-es_fijo=tipo_fractal in ("MANDELBROT","TRICORN","NEWTON")
-cx,cy=(base_c.real,base_c.imag) if es_fijo else (base_c.real+0.005*math.cos(t*3), base_c.imag+0.005*math.sin(t*3))
+es_fijo=tipo_fractal in ("MANDELBROT","TRICORN","BURNING SHIP MANDELBROT","BUFFALO","CELTIC","MULTIBROT 3","MULTIBROT 4","NEWTON")
+es_nova = tipo_fractal=="NOVA"
+cx,cy=(base_c.real,base_c.imag) if es_fijo or es_nova else (base_c.real+0.005*math.cos(t*3), base_c.imag+0.005*math.sin(t*3))
 c_var=complex(cx,cy)
 
 W,H=1000,800
 x=np.linspace(-1.5/zoom,1.5/zoom,W); y=np.linspace(-1.0/zoom,1.0/zoom,H)
 X,Y=np.meshgrid(x,y)
+Z = render_block(W,H,X,Y,c_var,tipo_fractal)
 
-if tipo_fractal=="MANDELBROT":
-    C=(X-0.5)+1j*Y; Z=np.zeros_like(C)
-    for _ in range(60): Z=Z*Z+C
-elif tipo_fractal=="TRICORN":
-    C=(X-0.5)+1j*Y; Z=np.zeros_like(C)
-    for _ in range(60): Z=np.conj(Z)**2+C
-elif tipo_fractal=="NEWTON":
-    Z=X+1j*Y
-    for _ in range(20):
-        Z2=Z*Z; Z3=Z2*Z; d=np.where(np.abs(3*Z2)<1e-6,1e-6,3*Z2); Z=Z-(Z3-1)/d
-else:
-    Z=X+1j*Y
-    if tipo_fractal=="BURNING SHIP JULIA":
-        for _ in range(60): Z=(np.abs(Z.real)+1j*np.abs(Z.imag))**2+c_var
-    else:
-        for _ in range(60): Z=Z*Z+c_var
-
-s=(np.angle(Z)+np.pi)/(2*np.pi) if tipo_fractal=="NEWTON" else (np.angle(Z)*0.22+np.log(np.abs(Z)+1)*tam)*0.375 % 1.0
+s=(np.angle(Z)+np.pi)/(2*np.pi) if tipo_fractal in ("NEWTON","NOVA") else (np.angle(Z)*0.22+np.log(np.abs(Z)+1)*tam)*0.375 % 1.0
 palette=np.array([hex_to_rgb(c) for c in colores_actuales],float)
 pos=s*6.0; i0=np.floor(pos).astype(int)%6; f=pos-np.floor(pos); f=0.5*(1-np.cos(f*np.pi))
 out=np.zeros((H,W,3),float)
@@ -178,25 +216,18 @@ for k in range(6):
     out[m,1]=(1-f[m])*palette[k,1]+f[m]*palette[nk,1]
     out[m,2]=(1-f[m])*palette[k,2]+f[m]*palette[nk,2]
 out=np.clip(out*brillo,0,255)
-
-# mascara y fondo para preview
 magnitud=np.abs(Z); brillo_pixel=out.mean(axis=2)
-if tipo_fractal=="NEWTON":
-    mask = brillo_pixel>(10+umbral*10)
-else:
-    mask = (magnitud<4) & (brillo_pixel>(10+umbral*10))
+mask = brillo_pixel>(10+umbral*10) if tipo_fractal in ("NEWTON","NOVA") else (magnitud<4) & (brillo_pixel>(10+umbral*10))
 
 if fondo_mode == "Transparente":
     alpha = np.where(mask,255,0).astype(np.uint8)
     img_base = Image.fromarray(np.dstack((out.astype(np.uint8), alpha)), "RGBA")
 else:
-    out_bg = out.copy()
-    out_bg[~mask] = bg_rgb
+    out_bg = out.copy(); out_bg[~mask]=bg_rgb
     img_base = Image.fromarray(out_bg.astype(np.uint8), "RGB").convert("RGBA")
 
 texto1=f"{nombre_cliente} {codigos}" if codigos.strip()!="" else nombre_cliente
 texto2=f"{tipo_fractal} | C={cx:.4f}+{cy:.4f}i | {FRACTALES[tipo_fractal]['formula']}"
-
 if incluir:
     img_final=img_base.copy(); draw=ImageDraw.Draw(img_final)
     es_oscuro = (bg_rgb[0]+bg_rgb[1]+bg_rgb[2])/3 < 128 if fondo_mode!="Transparente" else out[720:800,:].mean()<100
@@ -208,14 +239,12 @@ else:
     img_final=img_base
 
 st.image(img_final, width=1000)
+st.markdown(f"<div style='background:white;padding:14px 20px;border-radius:12px;border:1px solid #E0E0E0;'><b style='color:black;font-size:22px;'>{texto1}</b><br><span style='color:black;font-family:monospace;font-size:17px;'>{texto2}</span></div>", unsafe_allow_html=True)
 
 colores_rgb = [hex_to_rgb(c) for c in colores_actuales]
-
 def get_image_for_export(W, H, real=False):
     if not real:
-        if W==1000: return img_final
-        # para escalado rapido mantenemos fondo
-        return img_final.resize((W,H), Image.LANCZOS)
+        return img_final if (W==1000) else img_final.resize((W,H), Image.LANCZOS)
     else:
         out_true, mask_true = render_fractal_true(W, H, zoom, c_var, tipo_fractal, colores_rgb, tam, brillo, fondo_mode, bg_rgb, umbral)
         if fondo_mode=="Transparente":
@@ -224,12 +253,10 @@ def get_image_for_export(W, H, real=False):
         else:
             img_true = Image.fromarray(out_true, "RGB").convert("RGBA")
         if incluir:
-            draw = ImageDraw.Draw(img_true)
-            escala = W / 1000
-            font1 = get_font_bold(int(36*escala))
-            font2 = get_font_mono(int(26*escala))
-            es_oscuro = (bg_rgb[0]+bg_rgb[1]+bg_rgb[2])/3 < 128 if fondo_mode!="Transparente" else out_true[int(H*0.9):,:].mean()<100
-            col = (255,255,255,255) if es_oscuro else (0,0,0,255)
+            draw = ImageDraw.Draw(img_true); escala=W/1000
+            font1=get_font_bold(int(36*escala)); font2=get_font_mono(int(26*escala))
+            es_oscuro=(bg_rgb[0]+bg_rgb[1]+bg_rgb[2])/3 < 128 if fondo_mode!="Transparente" else out_true[int(H*0.9):,:].mean()<100
+            col=(255,255,255,255) if es_oscuro else (0,0,0,255)
             draw.text((int(24*escala), H-int(50*escala)), texto1, fill=col, font=font1)
             draw.text((int(24*escala), H-int(22*escala)), texto2, fill=col, font=font2)
         return img_true
@@ -237,20 +264,14 @@ def get_image_for_export(W, H, real=False):
 with st.sidebar:
     buf=io.BytesIO(); img_final.save(buf, format="PNG")
     st.download_button("PNG Standard 1000x800", buf.getvalue(), f"{nombre_cliente}_STD_{fondo_mode}.png", "image/png", key="png_std")
-
     if render_real_8k:
         if st.button("Generar 8K REAL NITIDO (2 min)", key="gen8k"):
             img_e = get_image_for_export(7680,6144, real=True)
             buf=io.BytesIO(); img_e.save(buf, format="PNG")
             st.download_button("⬇️ PNG 8K REAL", buf.getvalue(), f"{nombre_cliente}_8K_REAL_{fondo_mode}.png", "image/png", key="png_8k_real")
-            buf2=io.BytesIO();
-            # para PDF si es transparente lo pasamos a blanco
-            if fondo_mode=="Transparente":
-                img_e.convert("RGB").save(buf2, format="PDF", resolution=300.0)
-            else:
-                img_e.convert("RGB").save(buf2, format="PDF", resolution=300.0)
+            buf2=io.BytesIO(); img_e.convert("RGB").save(buf2, format="PDF", resolution=300.0)
             st.download_button("⬇️ PDF 8K REAL 300dpi", buf2.getvalue(), f"{nombre_cliente}_8K_REAL_{fondo_mode}.pdf", "application/pdf", key="pdf_8k_real")
-            st.success(f"Listo - Fondo {fondo_mode} en 8K REAL sin pixeles")
+            st.success(f"Fondo {fondo_mode} en 8K REAL sin pixeles")
     else:
         for W,H,label in [(3840,3072,"4K"), (7680,6144,"8K")]:
             img_e=get_image_for_export(W,H, real=False)
