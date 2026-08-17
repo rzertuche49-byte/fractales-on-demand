@@ -3,7 +3,7 @@ import numpy as np
 from PIL import Image, ImageDraw, ImageFont
 import io, math
 
-st.set_page_config(layout="wide", page_title="V99.3 FULL FIX")
+st.set_page_config(layout="wide", page_title="Fractales On Demand V99.5 TRUE 8K")
 
 def hex_to_rgb(h):
     h=h.lstrip('#')
@@ -18,6 +18,46 @@ def get_font_mono(size):
     except:
         try: return ImageFont.truetype("DejaVuSansMono.ttf", size)
         except: return ImageFont.load_default()
+
+# RENDER REAL POR BLOQUES - NO TRUENA RAM, SIN PIXEL
+def render_fractal_true(W, H, zoom, c_var, tipo_fractal, colores_rgb, tam, brillo_val):
+    out_full = np.zeros((H, W, 3), dtype=np.uint8)
+    ys = np.linspace(-1.0/zoom, 1.0/zoom, H)
+    xs = np.linspace(-1.5/zoom, 1.5/zoom, W)
+    palette = np.array(colores_rgb, float)
+    CHUNK = 320
+    for y0 in range(0, H, CHUNK):
+        y1 = min(y0+CHUNK, H)
+        y_chunk = ys[y0:y1]
+        X, Y = np.meshgrid(xs, y_chunk)
+
+        if tipo_fractal=="MANDELBROT":
+            C=(X-0.5)+1j*Y; Z=np.zeros_like(C)
+            for _ in range(60): Z=Z*Z+C
+        elif tipo_fractal=="TRICORN":
+            C=(X-0.5)+1j*Y; Z=np.zeros_like(C)
+            for _ in range(60): Z=np.conj(Z)**2+C
+        elif tipo_fractal=="NEWTON":
+            Z=X+1j*Y
+            for _ in range(20):
+                Z2=Z*Z; Z3=Z2*Z; d=np.where(np.abs(3*Z2)<1e-6,1e-6,3*Z2); Z=Z-(Z3-1)/d
+        else:
+            Z=X+1j*Y
+            if tipo_fractal=="BURNING SHIP JULIA":
+                for _ in range(60): Z=(np.abs(Z.real)+1j*np.abs(Z.imag))**2+c_var
+            else:
+                for _ in range(60): Z=Z*Z+c_var
+
+        s=(np.angle(Z)+np.pi)/(2*np.pi) if tipo_fractal=="NEWTON" else (np.angle(Z)*0.22+np.log(np.abs(Z)+1)*tam)*0.375 % 1.0
+        pos=s*6.0; i0=np.floor(pos).astype(int)%6; f=pos-np.floor(pos); f=0.5*(1-np.cos(f*np.pi))
+        out_chunk = np.zeros((y1-y0, W, 3), float)
+        for k in range(6):
+            m=i0==k; nk=(k+1)%6
+            out_chunk[m,0]=(1-f[m])*palette[k,0]+f[m]*palette[nk,0]
+            out_chunk[m,1]=(1-f[m])*palette[k,1]+f[m]*palette[nk,1]
+            out_chunk[m,2]=(1-f[m])*palette[k,2]+f[m]*palette[nk,2]
+        out_full[y0:y1] = np.clip(out_chunk*brillo_val,0,255).astype(np.uint8)
+    return out_full
 
 PALETAS = {
     "Tu captura": ["#00FFFF","#0064FF","#FF00C8","#FF6400","#FFFF00","#00FF64"],
@@ -63,7 +103,6 @@ with st.sidebar:
     paleta_nombre = st.selectbox("PALETA", list(PALETAS.keys()), 0)
     base = PALETAS[paleta_nombre]
     st.write("**EDITA 6 COLORES**")
-    # FIX: key incluye paleta para que si cambie
     c1=st.color_picker("C1", base[0], key=f"c1_{paleta_nombre}")
     c2=st.color_picker("C2", base[1], key=f"c2_{paleta_nombre}")
     c3=st.color_picker("C3", base[2], key=f"c3_{paleta_nombre}")
@@ -78,9 +117,10 @@ with st.sidebar:
     fondo_transparente = st.checkbox("Fondo transparente", False)
     umbral = st.slider("Limpieza fondo", 0.0, 5.0, 1.0)
     incluir = st.checkbox("Incrustar etiqueta en imagen", True)
-    calidad = st.slider("Calidad JPG", 80, 100, 95)
     st.divider()
-    st.write("**GUARDAR**")
+    calidad = st.slider("Calidad JPG", 80, 100, 95)
+    render_real_8k = st.checkbox("Render 8K REAL para imprenta (nitido, tarda 2 min)", value=True)
+    st.write("**GUARDAR - SIN PIXELES**")
 
 t=dia/365*2*math.pi
 base_c=FRACTALES[tipo_fractal]["c"]
@@ -88,6 +128,7 @@ es_fijo=tipo_fractal in ("MANDELBROT","TRICORN","NEWTON")
 cx,cy=(base_c.real,base_c.imag) if es_fijo else (base_c.real+0.005*math.cos(t*3), base_c.imag+0.005*math.sin(t*3))
 c_var=complex(cx,cy)
 
+# PREVIEW RAPIDO 1000x800
 W,H=1000,800
 x=np.linspace(-1.5/zoom,1.5/zoom,W); y=np.linspace(-1.0/zoom,1.0/zoom,H)
 X,Y=np.meshgrid(x,y)
@@ -148,24 +189,42 @@ st.markdown(f"""
 </div>
 """, unsafe_allow_html=True)
 
-def get_export(w,h):
-    return img_final if (w==1000 and h==800) else img_final.resize((w,h), Image.LANCZOS)
+# EXPORTACION
+colores_rgb = [hex_to_rgb(c) for c in colores_actuales]
+
+def get_image_for_export(W, H, real=False):
+    if not real:
+        return img_final if (W==1000) else img_final.resize((W,H), Image.LANCZOS)
+    else:
+        out_true = render_fractal_true(W, H, zoom, c_var, tipo_fractal, colores_rgb, tam, brillo)
+        img_true = Image.fromarray(out_true, "RGB").convert("RGBA")
+        if incluir:
+            draw = ImageDraw.Draw(img_true)
+            escala = W / 1000
+            font1 = get_font_bold(int(36*escala))
+            font2 = get_font_mono(int(26*escala))
+            es_oscuro = out_true[int(H*0.9):,:].mean()<100
+            col = (255,255,255,255) if es_oscuro else (0,0,0,255)
+            draw.text((int(24*escala), H-int(50*escala)), texto1, fill=col, font=font1)
+            draw.text((int(24*escala), H-int(22*escala)), texto2, fill=col, font=font2)
+        return img_true
 
 with st.sidebar:
-    st.write("PNG")
-    for w,h,label in [(1000,800,"Standard"), (3840,3072,"4K"), (7680,6144,"8K")]:
-        img_e=get_export(w,h)
-        buf=io.BytesIO(); img_e.save(buf, format="PNG")
-        st.download_button(f"PNG {label}", buf.getvalue(), f"{nombre_cliente}_{label}_{w}x{h}.png", "image/png", key=f"png_{label}")
+    # Standard siempre rapido
+    buf=io.BytesIO(); img_final.save(buf, format="PNG")
+    st.download_button("PNG Standard 1000x800", buf.getvalue(), f"{nombre_cliente}_STD.png", "image/png", key="png_std")
 
-    st.write("JPG")
-    for w,h,label in [(1000,800,"Standard"), (3840,3072,"4K"), (7680,6144,"8K")]:
-        img_e=get_export(w,h).convert("RGB")
-        buf=io.BytesIO(); img_e.save(buf, format="JPEG", quality=calidad)
-        st.download_button(f"JPG {label}", buf.getvalue(), f"{nombre_cliente}_{label}_{w}x{h}.jpg", "image/jpeg", key=f"jpg_{label}")
-
-    st.write("PDF 300dpi")
-    for w,h,label in [(1000,800,"Standard"), (3840,3072,"4K"), (7680,6144,"8K")]:
-        img_e=get_export(w,h).convert("RGB")
-        buf=io.BytesIO(); img_e.save(buf, format="PDF", resolution=300.0)
-        st.download_button(f"PDF {label}", buf.getvalue(), f"{nombre_cliente}_{label}_{w}x{h}.pdf", "application/pdf", key=f"pdf_{label}")
+    if render_real_8k:
+        if st.button("Generar PNG 8K REAL (2-3 min)", key="gen8k"):
+            img_e = get_image_for_export(7680,6144, real=True)
+            buf=io.BytesIO(); img_e.save(buf, format="PNG")
+            st.download_button("⬇️ DESCARGAR PNG 8K REAL 7680x6144", buf.getvalue(), f"{nombre_cliente}_8K_REAL.png", "image/png", key="png_8k_real_final")
+            buf2=io.BytesIO(); img_e.convert("RGB").save(buf2, format="PDF", resolution=300.0)
+            st.download_button("⬇️ DESCARGAR PDF 8K REAL 300dpi", buf2.getvalue(), f"{nombre_cliente}_8K_REAL.pdf", "application/pdf", key="pdf_8k_real_final")
+            st.success("Listo - este archivo es 100% nitido para imprenta, sin pixeles")
+    else:
+        # modo rapido escalado
+        for W,H,label in [(3840,3072,"4K"), (7680,6144,"8K")]:
+            img_e=get_image_for_export(W,H, real=False)
+            buf=io.BytesIO(); img_e.save(buf, format="PNG")
+            st.download_button(f"PNG {label} ESCALADO", buf.getvalue(), f"{nombre_cliente}_{label}_ESCALADO.png", "image/png", key=f"png_{label}_esc")
