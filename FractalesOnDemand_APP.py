@@ -538,3 +538,4 @@ if st.button("Generar Animacion", key="gen_anim"):
                 i=len(frames)-1
             col.image(frames[i], caption=f"Frame {i+1}", width=200)
             
+
