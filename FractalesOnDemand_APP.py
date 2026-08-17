@@ -3,7 +3,7 @@ import numpy as np
 from PIL import Image, ImageDraw, ImageFont
 import io, math
 
-st.set_page_config(layout="wide", page_title="V98")
+st.set_page_config(layout="wide", page_title="V98.1 - 4K 8K")
 
 def hex_to_rgb(h):
     h = h.lstrip('#')
@@ -53,6 +53,44 @@ FRACTALES = {
     "NEWTON": {"c": complex(0,0), "formula": "Zn+1=Zn-(Zn3-1)/3Zn2"},
 }
 
+def render_fractal(W, H, tipo_fractal, c_var, tam, brillo, palette_list, fondo_transparente, umbral):
+    x = np.linspace(-1.5/0.88, 1.5/0.88, W) if False else np.linspace(-1.5/zoom_global, 1.5/zoom_global, W)
+    y = np.linspace(-1.0/zoom_global, 1.0/zoom_global, H)
+    X,Y = np.meshgrid(x,y)
+    if tipo_fractal == "MANDELBROT":
+        C = (X-0.5) + 1j*Y; Z = np.zeros_like(C)
+        for _ in range(80): Z = Z*Z + C
+    elif tipo_fractal == "TRICORN":
+        C = (X-0.5) + 1j*Y; Z = np.zeros_like(C)
+        for _ in range(80): Z = np.conj(Z)**2 + C
+    elif tipo_fractal == "NEWTON":
+        Z = X + 1j*Y
+        for _ in range(30):
+            Z2=Z*Z; Z3=Z2*Z; d=np.where(np.abs(3*Z2)<1e-6,1e-6,3*Z2); Z=Z-(Z3-1)/d
+    else:
+        Z=X+1j*Y
+        if tipo_fractal=="BURNING SHIP JULIA":
+            for _ in range(80): Z=(np.abs(Z.real)+1j*np.abs(Z.imag))**2 + c_var
+        else:
+            for _ in range(80): Z=Z*Z + c_var
+    s=(np.angle(Z)+np.pi)/(2*np.pi) if tipo_fractal=="NEWTON" else (np.angle(Z)*0.22+np.log(np.abs(Z)+1)*tam)*0.375 % 1.0
+    palette=np.array([hex_to_rgb(c) for c in palette_list],float)
+    pos=s*6.0; i0=np.floor(pos).astype(int)%6; f=pos-np.floor(pos); f=0.5*(1-np.cos(f*np.pi))
+    out=np.zeros((H,W,3),float)
+    for k in range(6):
+        m=i0==k; nk=(k+1)%6
+        out[m,0]=(1-f[m])*palette[k,0]+f[m]*palette[nk,0]
+        out[m,1]=(1-f[m])*palette[k,1]+f[m]*palette[nk,1]
+        out[m,2]=(1-f[m])*palette[k,2]+f[m]*palette[nk,2]
+    out=np.clip(out*brillo,0,255).astype(np.uint8)
+    magnitud=np.abs(Z); brillo_pixel=out.mean(axis=2)
+    if fondo_transparente:
+        if tipo_fractal=="NEWTON": alpha=np.where(brillo_pixel>(10+umbral*10),255,0).astype(np.uint8)
+        else: alpha=np.where((magnitud<4)&(brillo_pixel>(10+umbral*10)),255,0).astype(np.uint8)
+        img_base=Image.fromarray(np.dstack((out,alpha)),"RGBA")
+    else: img_base=Image.fromarray(out,"RGB").convert("RGBA")
+    return img_base, out
+
 with st.sidebar:
     nombre_cliente = st.text_input("Nombre del cliente / proyecto", "ROBERTO ZERTUCHE")
     codigos = st.text_input("Códigos", "49/316/267")
@@ -73,62 +111,32 @@ with st.sidebar:
     fondo_transparente = st.checkbox("Fondo transparente", value=False)
     umbral = st.slider("Limpieza fondo", 0.0, 5.0, 1.0)
     incluir_etiqueta_en_imagen = st.checkbox("Incrustar etiqueta en imagen", value=True)
+    st.divider()
+    st.write("**FORMATO DE IMPRESION**")
+    formato = st.selectbox("Resolucion", ["Standard (1000x800)", "4K (3840x3072)", "8K (7680x6144)"], index=0)
+    calidad_jpg = st.slider("Calidad JPG", 80, 100, 95)
 
+# globals para render
+zoom_global = zoom
 st.title(nombre_cliente)
 t = dia/365*2*math.pi
 base_c = FRACTALES[tipo_fractal]["c"]
 es_fijo = tipo_fractal in ("MANDELBROT", "TRICORN", "NEWTON")
-if es_fijo:
-    cx, cy = base_c.real, base_c.imag
-else:
-    cx, cy = base_c.real + 0.005*math.cos(t*3), base_c.imag + 0.005*math.sin(t*3)
+if es_fijo: cx, cy = base_c.real, base_c.imag
+else: cx, cy = base_c.real + 0.005*math.cos(t*3), base_c.imag + 0.005*math.sin(t*3)
 c_var = complex(cx, cy)
 
-x = np.linspace(-1.5/zoom, 1.5/zoom, 1000)
-y = np.linspace(-1.0/zoom, 1.0/zoom, 800)
-X,Y = np.meshgrid(x,y)
+# Tamaño segun formato
+if "8K" in formato: W_exp, H_exp = 7680, 6144
+elif "4K" in formato: W_exp, H_exp = 3840, 3072
+else: W_exp, H_exp = 1000, 800
 
-if tipo_fractal == "MANDELBROT":
-    C = (X-0.5) + 1j*Y; Z = np.zeros_like(C)
-    for _ in range(80): Z = Z*Z + C
-elif tipo_fractal == "TRICORN":
-    C = (X-0.5) + 1j*Y; Z = np.zeros_like(C)
-    for _ in range(80): Z = np.conj(Z)**2 + C
-elif tipo_fractal == "NEWTON":
-    Z = X + 1j*Y
-    for _ in range(30):
-        Z2=Z*Z; Z3=Z2*Z; d=np.where(np.abs(3*Z2)<1e-6,1e-6,3*Z2); Z=Z-(Z3-1)/d
-else:
-    Z=X+1j*Y
-    if tipo_fractal=="BURNING SHIP JULIA":
-        for _ in range(80): Z=(np.abs(Z.real)+1j*np.abs(Z.imag))**2 + c_var
-    else:
-        for _ in range(80): Z=Z*Z + c_var
-
-s=(np.angle(Z)+np.pi)/(2*np.pi) if tipo_fractal=="NEWTON" else (np.angle(Z)*0.22+np.log(np.abs(Z)+1)*tam)*0.375 % 1.0
-palette=np.array([hex_to_rgb(c) for c in colores_actuales],float)
-pos=s*6.0; i0=np.floor(pos).astype(int)%6; f=pos-np.floor(pos); f=0.5*(1-np.cos(f*np.pi))
-out=np.zeros((800,1000,3),float)
-for k in range(6):
-    m=i0==k; nk=(k+1)%6
-    out[m,0]=(1-f[m])*palette[k,0]+f[m]*palette[nk,0]
-    out[m,1]=(1-f[m])*palette[k,1]+f[m]*palette[nk,1]
-    out[m,2]=(1-f[m])*palette[k,2]+f[m]*palette[nk,2]
-out=np.clip(out*brillo,0,255).astype(np.uint8)
-
-magnitud=np.abs(Z); brillo_pixel=out.mean(axis=2)
-if fondo_transparente:
-    if tipo_fractal=="NEWTON": alpha=np.where(brillo_pixel>(10+umbral*10),255,0).astype(np.uint8)
-    else: alpha=np.where((magnitud<4)&(brillo_pixel>(10+umbral*10)),255,0).astype(np.uint8)
-    img_base=Image.fromarray(np.dstack((out,alpha)),"RGBA")
-else: img_base=Image.fromarray(out,"RGB").convert("RGBA")
+# Preview siempre en 1000x800 para velocidad, export en alta
+img_base_preview, out_preview = render_fractal(1000, 800, tipo_fractal, c_var, tam, brillo, colores_actuales, fondo_transparente, umbral)
 
 formula_txt=FRACTALES[tipo_fractal]["formula"]
-
-# --- CAMBIO 1 Y 2 QUE PEDISTE ---
-# Proporcion final aplicada a todo + eliminar | entre nombre y codigo
-SEP_GRANDE = " | " # 4 espacios por lado, igual en todos
-SEP_NOMBRE = " " # sin |, solo espacio amplio
+SEP_GRANDE = " | "
+SEP_NOMBRE = " "
 
 if codigos.strip()!="":
     texto_linea1 = f"{nombre_cliente}{SEP_NOMBRE}{codigos}"
@@ -136,22 +144,19 @@ else:
     texto_linea1 = f"{nombre_cliente}"
 texto_linea2 = f"{tipo_fractal}{SEP_GRANDE}C={cx:.4f}+{cy:.4f}i{SEP_GRANDE}{formula_txt}"
 
+# Etiqueta preview
 if incluir_etiqueta_en_imagen:
-    img_final=img_base.copy(); W,H=img_final.size; draw=ImageDraw.Draw(img_final)
-    muestra_inf=out[H-80:H,:].mean() if H>=80 else out.mean()
+    img_final_preview=img_base_preview.copy(); W,H=img_final_preview.size; draw=ImageDraw.Draw(img_final_preview)
+    muestra_inf=out_preview[H-80:H,:].mean() if H>=80 else out_preview.mean()
     es_oscuro=muestra_inf<100
     color_texto=(255,255,255,255) if es_oscuro else (0,0,0,255)
-    font1=get_font_bold(36)
-    font2=get_font_mono(26)
-    x0=24
-    # Distancia vertical reducida, misma proporcion que horizontal
-    y1=H-50
-    y2=H-22
+    font1=get_font_bold(36); font2=get_font_mono(26)
+    x0=24; y1=H-50; y2=H-22
     draw.text((x0,y1),texto_linea1,fill=color_texto,font=font1)
     draw.text((x0,y2),texto_linea2,fill=color_texto,font=font2)
-else: img_final=img_base
+else: img_final_preview=img_base_preview
 
-st.image(img_final, use_container_width=False, width=1000)
+st.image(img_final_preview, use_container_width=False, width=1000)
 
 st.markdown(f"""
 <div style="background:white; padding:14px 20px; border-radius:12px; border:1px solid #E0E0E0; line-height:1.1;">
@@ -161,5 +166,42 @@ st.markdown(f"""
 </div>
 """, unsafe_allow_html=True)
 
-buf=io.BytesIO(); img_final.save(buf,format="PNG")
-st.sidebar.download_button("📥 Descargar PNG",buf.getvalue(),f"{nombre_cliente.replace(' ','_')}_{tipo_fractal}.png","image/png",type="primary")
+# --- EXPORTACION 4K/8K ---
+# Genera la version en alta solo al descargar para no trabar la app
+def build_final(W, H):
+    img_base, out = render_fractal(W, H, tipo_fractal, c_var, tam, brillo, colores_actuales, fondo_transparente, umbral)
+    if incluir_etiqueta_en_imagen:
+        img_final=img_base.copy(); draw=ImageDraw.Draw(img_final)
+        muestra_inf=out[H-80:H,:].mean() if H>=80 else out.mean()
+        es_oscuro=muestra_inf<100
+        color_texto=(255,255,255,255) if es_oscuro else (0,0,0,255)
+        # Escala fuente segun resolucion
+        scale = W/1000
+        font1=get_font_bold(int(36*scale)); font2=get_font_mono(int(26*scale))
+        x0=int(24*scale); y1=H-int(50*scale); y2=H-int(22*scale)
+        draw.text((x0,y1),texto_linea1,fill=color_texto,font=font1)
+        draw.text((x0,y2),texto_linea2,fill=color_texto,font=font2)
+    else:
+        img_final=img_base
+    return img_final
+
+st.sidebar.divider()
+st.sidebar.write(f"**Descargar en {formato}**")
+
+# PNG
+img_export = build_final(W_exp, H_exp)
+buf_png = io.BytesIO(); img_export.save(buf_png, format="PNG")
+st.sidebar.download_button(f"📥 PNG {formato}", buf_png.getvalue(), f"{nombre_cliente.replace(' ','_')}_{tipo_fractal}_{W_exp}x{H_exp}.png", "image/png", type="primary")
+
+# JPG
+img_jpg = img_export.convert("RGB") if img_export.mode=="RGBA" else img_export
+buf_jpg = io.BytesIO(); img_jpg.save(buf_jpg, format="JPEG", quality=calidad_jpg, dpi=(300,300))
+st.sidebar.download_button(f"📥 JPG {formato}", buf_jpg.getvalue(), f"{nombre_cliente.replace(' ','_')}_{tipo_fractal}_{W_exp}x{H_exp}.jpg", "image/jpeg")
+
+# PDF - carta / A3 imprimible
+buf_pdf = io.BytesIO()
+# PDF en alta, imagen centrada en pagina
+img_rgb = img_export.convert("RGB")
+# Guardar como PDF directo de Pillow
+img_rgb.save(buf_pdf, format="PDF", resolution=300.0)
+st.sidebar.download_button(f"📥 PDF {formato} (impresion 300dpi)", buf_pdf.getvalue(), f"{nombre_cliente.replace(' ','_')}_{tipo_fractal}_{W_exp}x{H_exp}.pdf", "application/pdf")
