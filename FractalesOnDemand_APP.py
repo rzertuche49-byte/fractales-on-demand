@@ -3,77 +3,59 @@ import numpy as np
 from PIL import Image, ImageDraw, ImageFont
 import io, math
 
-st.set_page_config(layout="wide", page_title="Fractales On Demand V100.4 FUENTE FIX")
+st.set_page_config(layout="wide", page_title="Fractales On Demand V100.5 OPTIMA COMPLETA")
 
 def hex_to_rgb(h):
     h=h.lstrip('#')
     return [int(h[0:2],16), int(h[2:4],16), int(h[4:6],16)]
 
 def get_font_bold_fixed(size):
-    # TIPOGRAFIA QUE NO SE CAE - Usa matplotlib que siempre trae DejaVu
+    # FUENTE QUE NUNCA SE CAE + ESCALABLE
     try:
         from matplotlib import font_manager
-        font_path = font_manager.findfont("DejaVu Sans", fallback_to_default=True)
-        return ImageFont.truetype(font_path, size)
+        fp = font_manager.findfont("DejaVu Sans", fallback_to_default=True)
+        return ImageFont.truetype(fp, size)
     except:
-        try:
-            # fallback 2 - Arial
-            from matplotlib import font_manager
-            font_path = font_manager.findfont("DejaVu Sans Mono", fallback_to_default=True)
-            return ImageFont.truetype(font_path, size)
-        except:
-            # fallback 3 - carga directa sin path
-            return ImageFont.truetype("DejaVuSans.ttf", size)
+        try: return ImageFont.truetype("DejaVuSans-Bold.ttf", size)
+        except: return ImageFont.truetype("DejaVuSans.ttf", size)
 
 def get_font_mono_fixed(size):
     try:
         from matplotlib import font_manager
-        font_path = font_manager.findfont("DejaVu Sans Mono", fallback_to_default=True)
-        return ImageFont.truetype(font_path, size)
+        fp = font_manager.findfont("DejaVu Sans Mono", fallback_to_default=True)
+        return ImageFont.truetype(fp, size)
     except:
-        try:
-            from matplotlib import font_manager
-            font_path = font_manager.findfont("DejaVu Sans", fallback_to_default=True)
-            return ImageFont.truetype(font_path, size)
-        except:
-            return ImageFont.truetype("DejaVuSansMono.ttf", size)
+        try: return ImageFont.truetype("DejaVuSansMono-Bold.ttf", size)
+        except: return ImageFont.truetype("DejaVuSansMono.ttf", size)
 
-# ETIQUETA CON FUENTE FIX - 20% ALTO + TEXTO RASTERIZADO
 def crear_imagen_con_etiqueta_abajo(img_base, texto1, texto2, escala=1.0):
     W,H = img_base.size
-    label_h = int(H * 0.22) # 22% para que se lea bien en tu captura
+    # PROPORCION OPTIMA DE TU PRIMERA IMAGEN - 13.5% como pediste
+    label_h = int(H * 0.135)
     nueva_h = H + label_h
     nueva = Image.new("RGB", (W, nueva_h), (255,255,255))
-    # fractal arriba
     if img_base.mode == "RGBA":
         nueva.paste(img_base, (0,0), img_base)
     else:
         nueva.paste(img_base, (0,0))
-
     draw = ImageDraw.Draw(nueva)
-    # fondo blanco
     draw.rectangle([0,H,W,nueva_h], fill=(255,255,255))
-
-    # TAMAÑOS FIJOS PROPORCIONALES - AHORA SI ESCALAN
-    # Para W=1000 -> 40px y 24px / Para W=7680 -> 307px y 184px
-    font_size_1 = int(W * 0.04)
-    font_size_2 = int(W * 0.024)
-
+    draw.line([0,H,W,H], fill=(230,230,230), width=1)
+    # FUENTE REDUCIDA OPTIMA - MISMA QUE TU CAPTURA
+    # Standard 1000px = 28px / 19px | 8K 7680px = 215px / 145px (proporcional, no gigante)
+    font_size_1 = int(W * 0.028) # antes 0.04 -> ahora 0.028 reducido
+    font_size_2 = int(W * 0.019) # antes 0.024 -> ahora 0.019 reducido
     font1 = get_font_bold_fixed(font_size_1)
     font2 = get_font_mono_fixed(font_size_2)
-
-    pad_x = int(W * 0.025)
-    pad_y1 = int(label_h * 0.22)
-    pad_y2 = int(label_h * 0.12)
-
-    # DIBUJAR COMO IMAGEN - YA NO ES TEXTO VECTORIAL
-    draw.text((pad_x, H+pad_y1), texto1, fill=(0,0,0), font=font1, stroke_width=0)
+    pad_x = int(W * 0.018)
+    pad_y1 = int(label_h * 0.18)
+    pad_y2 = int(label_h * 0.10)
+    draw.text((pad_x, H+pad_y1), texto1, fill=(0,0,0), font=font1)
     try:
         bbox1 = draw.textbbox((0,0), texto1, font=font1)
         h1 = bbox1[3]-bbox1[1]
-    except:
-        h1 = font_size_1
-    draw.text((pad_x, H+pad_y1+h1+pad_y2), texto2, fill=(0,0,0), font=font2)
+    except: h1 = font_size_1
+    draw.text((pad_x, H+pad_y1+h1+pad_y2), texto2, fill=(15,15,15), font=font2)
     return nueva
 
 def render_block(W_chunk, H_chunk, X, Y, c_var, tipo, iter_base=60):
@@ -142,7 +124,7 @@ def render_fractal_true(W, H, zoom, c_var, tipo_fractal, colores_rgb, tam, brill
     ys = np.linspace(-1.0/zoom, 1.0/zoom, H)
     xs = np.linspace(-1.5/zoom, 1.5/zoom, W)
     palette = np.array(colores_rgb, float)
-    CHUNK = 256
+    CHUNK = 320
     for y0 in range(0, H, CHUNK):
         y1 = min(y0+CHUNK, H)
         y_chunk = ys[y0:y1]
@@ -177,7 +159,25 @@ def render_fractal_true(W, H, zoom, c_var, tipo_fractal, colores_rgb, tam, brill
 
 PALETAS = {
     "Tu captura": ["#00FFFF","#0064FF","#FF00C8","#FF6400","#FFFF00","#00FF64"],
+    "Neon 80s": ["#00FFFF","#FF00FF","#FFFF00","#00FF00","#FF0066","#6600FF"],
     "Fuego": ["#FF0000","#FF6600","#FFCC00","#FF3300","#CC0000","#FF9900"],
+    "Oceano Profundo": ["#001F54","#034078","#1282A2","#00B4D8","#90E0EF","#CAF0F8"],
+    "Pastel Dream": ["#FFB5E8","#B5DEFF","#C3FF99","#FFF5BA","#FFC9DE","#D1BDFF"],
+    "Sunset": ["#F72585","#7209B7","#3A0CA3","#4361EE","#4CC9F0","#FFBE0B"],
+    "Galaxy": ["#0B0C10","#1F2833","#45A29E","#66FCF1","#C5C6C7","#9D00FF"],
+    "Toxic": ["#00FF00","#CCFF00","#00FFCC","#FFFF00","#FF00FF","#00FFFF"],
+    "Candy": ["#FF70A6","#FF9770","#FFD670","#E9FF70","#70FFB2","#70D6FF"],
+    "Bosque": ["#0A2F0A","#1B5E20","#2E7D32","#66BB6A","#A5D6A7","#C8E6C9"],
+    "Volcan": ["#000000","#4A0000","#8B0000","#FF4500","#FF8C00","#FFD700"],
+    "Aurora": ["#03045E","#0077B6","#00B4D8","#90E0EF","#ADE8F4","#CAF0F8"],
+    "Miami Vice": ["#FF6BEC","#3EFFE2","#FFD93D","#FF6B6B","#6BCB77","#4D96FF"],
+    "Cyberpunk": ["#FF003C","#00F0FF","#F0FF00","#FF00F0","#00FF9F","#7000FF"],
+    "Helado": ["#FEC8D8","#FFDFD3","#FFF0B5","#D0F4DE","#A9DEF9","#E4C1F9"],
+    "Matrix": ["#000000","#003B00","#008F11","#00FF41","#00FF00","#AAFF00"],
+    "Desierto": ["#7F5539","#9C6644","#B08968","#DDB892","#E6CCB2","#EDE0D4"],
+    "Joker": ["#3D087B","#5A189A","#7B2CBF","#9D4EDD","#C77DFF","#00F5D4"],
+    "Psicodelico": ["#FF00FF","#00FFFF","#FFFF00","#FF0000","#00FF00","#0000FF"],
+    "Elegante": ["#000000","#1A1A1A","#D4AF37","#F5F5DC","#8B7355","#FFFFFF"],
 }
 FRACTALES = {
     "RABBIT": {"c": complex(-0.123, 0.745), "formula": "Zn+1=Zn2+C"},
@@ -211,7 +211,7 @@ with st.sidebar:
     tipo_fractal = st.selectbox("TIPO DE FRACTAL (21)", list(FRACTALES.keys()), 7)
     dia = st.slider("DIA", 1, 365, 49)
     zoom = st.slider("ZOOM", 0.2, 5.0, 1.0)
-    paleta_nombre = st.selectbox("PALETA", list(PALETAS.keys()), 1)
+    paleta_nombre = st.selectbox("PALETA", list(PALETAS.keys()), 0)
     base = PALETAS[paleta_nombre]
     st.write("**EDITA 6 COLORES**")
     c1=st.color_picker("C1", base[0], key=f"c1_{paleta_nombre}")
@@ -299,12 +299,15 @@ with st.sidebar:
     st.download_button("PNG Standard con etiqueta abajo", buf.getvalue(), f"{nombre_cliente}_STD_{fondo_mode}_ETIQUETA.png", "image/png", key="png_std")
 
     if render_real_8k:
-        if st.button("Generar 8K REAL con etiqueta FIX", key="gen8k"):
+        if st.button("Generar 8K REAL con etiqueta proporcion optima", key="gen8k"):
             img_e = render_fractal_true(7680,6144, zoom, c_var, tipo_fractal, colores_rgb, tam, brillo, fondo_mode, bg_rgb, umbral, texto1, texto2, presentar_etiqueta)
             buf=io.BytesIO(); img_e.save(buf, format="PNG")
             st.download_button("⬇️ PNG 8K REAL LEGIBLE", buf.getvalue(), f"{nombre_cliente}_8K_REAL_{fondo_mode}_ETIQUETA.png", "image/png", key="png_8k_real")
-            buf2=io.BytesIO()
-            # Guardar PDF como RGB 300dpi con etiqueta rasterizada
-            img_e.convert("RGB").save(buf2, format="PDF", resolution=300.0)
+            buf2=io.BytesIO(); img_e.convert("RGB").save(buf2, format="PDF", resolution=300.0)
             st.download_button("⬇️ PDF 8K REAL 300dpi LEGIBLE", buf2.getvalue(), f"{nombre_cliente}_8K_REAL_{fondo_mode}_ETIQUETA.pdf", "application/pdf", key="pdf_8k_real")
-            st.success("Fuente DejaVu de matplotlib - 307px titulo en 8K - no se cae")
+            st.success("Etiqueta 13.5% - 215px en 8K - proporcion optima")
+    else:
+        for Wc,Hc,label in [(3840,3072,"4K"), (7680,6144,"8K")]:
+            img_e=render_fractal_true(Wc,Hc, zoom, c_var, tipo_fractal, colores_rgb, tam, brillo, fondo_mode, bg_rgb, umbral, texto1, texto2, presentar_etiqueta)
+            buf=io.BytesIO(); img_e.save(buf, format="PNG")
+            st.download_button(f"PNG {label} con etiqueta abajo", buf.getvalue(), f"{nombre_cliente}_{label}_{fondo_mode}_ETIQUETA.png", "image/png", key=f"png_{label}_{fondo_mode}")
