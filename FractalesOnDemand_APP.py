@@ -3,7 +3,7 @@ import numpy as np
 from PIL import Image, ImageDraw, ImageFont
 import io, math
 
-st.set_page_config(layout="wide", page_title="V97")
+st.set_page_config(layout="wide", page_title="V97.1")
 
 def hex_to_rgb(h):
     h = h.lstrip('#')
@@ -11,9 +11,7 @@ def hex_to_rgb(h):
 
 def get_font_bold(size):
     try: return ImageFont.truetype("DejaVuSans-Bold.ttf", size)
-    except:
-        try: return ImageFont.truetype("DejaVuSans.ttf", size)
-        except: return ImageFont.load_default()
+    except: return ImageFont.load_default()
 
 def get_font_mono(size):
     try: return ImageFont.truetype("DejaVuSansMono-Bold.ttf", size)
@@ -43,7 +41,6 @@ PALETAS = {
     "Psicodelico": ["#FF00FF","#00FFFF","#FFFF00","#FF0000","#00FF00","#0000FF"],
     "Elegante": ["#000000","#1A1A1A","#D4AF37","#F5F5DC","#8B7355","#FFFFFF"],
 }
-
 FRACTALES = {
     "DENDRITE": {"c": complex(-0.745, 0.11), "formula": "Zn+1=Zn2+C"},
     "RABBIT": {"c": complex(-0.123, 0.745), "formula": "Zn+1=Zn2+C"},
@@ -78,16 +75,13 @@ with st.sidebar:
     incluir_etiqueta_en_imagen = st.checkbox("Incrustar etiqueta en imagen", value=True)
 
 st.title(nombre_cliente)
-
 t = dia/365*2*math.pi
 base_c = FRACTALES[tipo_fractal]["c"]
 es_fijo = tipo_fractal in ("MANDELBROT", "TRICORN", "NEWTON")
 if es_fijo:
-    cx = base_c.real
-    cy = base_c.imag
+    cx, cy = base_c.real, base_c.imag
 else:
-    cx = base_c.real + 0.005*math.cos(t*3)
-    cy = base_c.imag + 0.005*math.sin(t*3)
+    cx, cy = base_c.real + 0.005*math.cos(t*3), base_c.imag + 0.005*math.sin(t*3)
 c_var = complex(cx, cy)
 
 x = np.linspace(-1.5/zoom, 1.5/zoom, 1000)
@@ -103,72 +97,51 @@ elif tipo_fractal == "TRICORN":
 elif tipo_fractal == "NEWTON":
     Z = X + 1j*Y
     for _ in range(30):
-        Z2 = Z*Z; Z3 = Z2*Z
-        denom = np.where(np.abs(3*Z2)<1e-6, 1e-6, 3*Z2)
-        Z = Z - (Z3-1)/denom
+        Z2=Z*Z; Z3=Z2*Z; d=np.where(np.abs(3*Z2)<1e-6,1e-6,3*Z2); Z=Z-(Z3-1)/d
 else:
-    Z = X+1j*Y
-    if tipo_fractal == "BURNING SHIP JULIA":
-        for _ in range(80): Z = (np.abs(Z.real) + 1j*np.abs(Z.imag))**2 + c_var
+    Z=X+1j*Y
+    if tipo_fractal=="BURNING SHIP JULIA":
+        for _ in range(80): Z=(np.abs(Z.real)+1j*np.abs(Z.imag))**2 + c_var
     else:
-        for _ in range(80): Z = Z*Z + c_var
+        for _ in range(80): Z=Z*Z + c_var
 
-if tipo_fractal == "NEWTON":
-    s = (np.angle(Z) + np.pi) / (2*np.pi)
-else:
-    fase = np.angle(Z)*0.22 + np.log(np.abs(Z)+1)*tam
-    s = (fase*0.375) % 1.0
-
-palette = np.array([hex_to_rgb(c) for c in colores_actuales], float)
-pos = s*6.0; i0 = np.floor(pos).astype(int) % 6
-f = pos - np.floor(pos); f = 0.5*(1-np.cos(f*np.pi))
-out = np.zeros((800,1000,3), float)
+s=(np.angle(Z)+np.pi)/(2*np.pi) if tipo_fractal=="NEWTON" else (np.angle(Z)*0.22+np.log(np.abs(Z)+1)*tam)*0.375 % 1.0
+palette=np.array([hex_to_rgb(c) for c in colores_actuales],float)
+pos=s*6.0; i0=np.floor(pos).astype(int)%6; f=pos-np.floor(pos); f=0.5*(1-np.cos(f*np.pi))
+out=np.zeros((800,1000,3),float)
 for k in range(6):
-    m = i0==k; nk = (k+1)%6
-    out[m,0] = (1-f[m])*palette[k,0] + f[m]*palette[nk,0]
-    out[m,1] = (1-f[m])*palette[k,1] + f[m]*palette[nk,1]
-    out[m,2] = (1-f[m])*palette[k,2] + f[m]*palette[nk,2]
-out = np.clip(out*brillo,0,255).astype(np.uint8)
+    m=i0==k; nk=(k+1)%6
+    out[m,0]=(1-f[m])*palette[k,0]+f[m]*palette[nk,0]
+    out[m,1]=(1-f[m])*palette[k,1]+f[m]*palette[nk,1]
+    out[m,2]=(1-f[m])*palette[k,2]+f[m]*palette[nk,2]
+out=np.clip(out*brillo,0,255).astype(np.uint8)
 
-magnitud = np.abs(Z); brillo_pixel = out.mean(axis=2)
+magnitud=np.abs(Z); brillo_pixel=out.mean(axis=2)
 if fondo_transparente:
-    if tipo_fractal == "NEWTON":
-        alpha = np.where(brillo_pixel > (10 + umbral*10), 255, 0).astype(np.uint8)
-    else:
-        alpha = np.where((magnitud < 4) & (brillo_pixel > (10 + umbral*10)), 255, 0).astype(np.uint8)
-    img_base = Image.fromarray(np.dstack((out, alpha)), "RGBA")
-else:
-    img_base = Image.fromarray(out, "RGB").convert("RGBA")
+    if tipo_fractal=="NEWTON": alpha=np.where(brillo_pixel>(10+umbral*10),255,0).astype(np.uint8)
+    else: alpha=np.where((magnitud<4)&(brillo_pixel>(10+umbral*10)),255,0).astype(np.uint8)
+    img_base=Image.fromarray(np.dstack((out,alpha)),"RGBA")
+else: img_base=Image.fromarray(out,"RGB").convert("RGBA")
 
-formula_txt = FRACTALES[tipo_fractal]["formula"]
-if codigos.strip()!= "":
-    texto_linea1 = f"{nombre_cliente} | {codigos}"
-else:
-    texto_linea1 = f"{nombre_cliente}"
-texto_linea2 = f"{tipo_fractal} | C={cx:.4f}+{cy:.4f}i | {formula_txt}"
+formula_txt=FRACTALES[tipo_fractal]["formula"]
+texto_linea1=f"{nombre_cliente} | {codigos}" if codigos.strip()!="" else f"{nombre_cliente}"
+texto_linea2=f"{tipo_fractal} | C={cx:.4f}+{cy:.4f}i | {formula_txt}"
 
-# ETIQUETA 1 - MISMA TIPOGRAFIA QUE LA DE ABAJO
 if incluir_etiqueta_en_imagen:
-    img_final = img_base.copy()
-    W,H = img_final.size
-    draw = ImageDraw.Draw(img_final)
-    muestra_inf = out[H-80:H, :].mean() if H>=80 else out.mean()
-    es_oscuro = muestra_inf < 100
-    color_texto = (255,255,255,255) if es_oscuro else (0,0,0,255)
-    # Mismo estilo que la etiqueta de abajo
-    font1 = get_font_bold(26)
-    font2 = get_font_mono(20)
-    x0 = 24
-    y1 = H - 62
-    y2 = H - 28
-    draw.text((x0, y1), texto_linea1, fill=color_texto, font=font1)
-    draw.text((x0, y2), texto_linea2, fill=color_texto, font=font2)
-else:
-    img_final = img_base
+    img_final=img_base.copy(); W,H=img_final.size; draw=ImageDraw.Draw(img_final)
+    muestra_inf=out[H-80:H,:].mean() if H>=80 else out.mean()
+    es_oscuro=muestra_inf<100
+    color_texto=(255,255,255,255) if es_oscuro else (0,0,0,255)
+    # Tipografia mas grande para compensar el escalado del navegador
+    font1=get_font_bold(42)
+    font2=get_font_mono(30)
+    x0=24; y1=H-72; y2=H-30
+    draw.text((x0,y1),texto_linea1,fill=color_texto,font=font1)
+    draw.text((x0,y2),texto_linea2,fill=color_texto,font=font2)
+else: img_final=img_base
 
-st.image(img_final, use_container_width=True)
+st.image(img_final, use_container_width=False, width=1000) # Sin estirar, para que no se vea borrosa
 
-# ETIQUETA 2 - SIEMPRE BLANCA CON TEXTO NEGRO - REFERENCIA
 st.markdown(f"""
 <div style="background:white; padding:18px 20px; border-radius:12px; border:1px solid #E0E0E0;">
 <b style="color:black; font-size:22px; font-family:DejaVu Sans, Arial, sans-serif; font-weight:800;">{texto_linea1}</b><br>
@@ -176,5 +149,5 @@ st.markdown(f"""
 </div>
 """, unsafe_allow_html=True)
 
-buf = io.BytesIO(); img_final.save(buf, format="PNG")
-st.sidebar.download_button("📥 Descargar PNG", buf.getvalue(), f"{nombre_cliente.replace(' ','_')}_{tipo_fractal}.png", "image/png", type="primary")
+buf=io.BytesIO(); img_final.save(buf,format="PNG")
+st.sidebar.download_button("📥 Descargar PNG",buf.getvalue(),f"{nombre_cliente.replace(' ','_')}_{tipo_fractal}.png","image/png",type="primary")
