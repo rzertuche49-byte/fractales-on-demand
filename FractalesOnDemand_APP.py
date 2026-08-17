@@ -3,8 +3,8 @@ import numpy as np
 from PIL import Image
 import io, math
 
-st.set_page_config(layout="wide", page_title="V77.2 FIX")
-st.title("FRACTALES BAJO DEMANDA - V77.2 FIX PALETAS")
+st.set_page_config(layout="wide", page_title="V78 ESTABLE")
+st.title("FRACTALES BAJO DEMANDA - V78 ESTABLE")
 
 def hex_to_rgb(h):
     h=h.lstrip('#')
@@ -20,17 +20,6 @@ PALETAS = {
     "Tu captura": ["#00FFFF","#0064FF","#FF00C8","#FF6400","#FFFF00","#00FF64"],
 }
 
-if 'colores' not in st.session_state:
-    st.session_state.colores = PALETAS["Tu captura"]
-    for i,c in enumerate(st.session_state.colores):
-        st.session_state[f"cp_{i}"] = c
-
-def aplicar_paleta(nombre):
-    pal = PALETAS[nombre]
-    st.session_state.colores = pal
-    for i,c in enumerate(pal):
-        st.session_state[f"cp_{i}"] = c
-
 with st.sidebar:
     st.subheader("DIA / FORMA")
     dia = st.slider("DIA", 1, 365, 283)
@@ -38,21 +27,20 @@ with st.sidebar:
     center_x = st.slider("Centro X", -1.5, 1.5, 0.01, 0.005)
     center_y = st.slider("Centro Y", -1.5, 1.5, 0.0, 0.005)
     picos = st.slider("PICOS / CALIDAD", 0, 100, 85)
+
     st.divider()
-    st.subheader("🎨 PALETAS 1-CLICK")
-    cols = st.columns(2)
-    for idx, (nombre, pal) in enumerate(PALETAS.items()):
-        if cols[idx%2].button(nombre, use_container_width=True, key=f"btn_{nombre}"):
-            aplicar_paleta(nombre)
-            st.rerun()
-    st.divider()
-    st.subheader("TUS 6 COLORES")
-    c_inputs=[]
-    for i in range(6):
-        # usa el valor de session_state
-        col = st.color_picker(f"Color {i+1}", key=f"cp_{i}")
-        c_inputs.append(col)
-    st.session_state.colores = c_inputs
+    st.subheader("🎨 PALETAS")
+    paleta_nombre = st.selectbox("Elige paleta", list(PALETAS.keys()), index=6)
+    paleta_base = PALETAS[paleta_nombre]
+
+    st.write("Ajusta si quieres:")
+    c1 = st.color_picker("Color 1", paleta_base[0])
+    c2 = st.color_picker("Color 2", paleta_base[1])
+    c3 = st.color_picker("Color 3", paleta_base[2])
+    c4 = st.color_picker("Color 4", paleta_base[3])
+    c5 = st.color_picker("Color 5", paleta_base[4])
+    c6 = st.color_picker("Color 6", paleta_base[5])
+
     st.divider()
     ciclos = st.slider("ciclos", 0.1, 5.0, 1.50, 0.1)
     mezcla = st.slider("Detalle espiral", 0.0, 1.0, 0.22, 0.02)
@@ -102,7 +90,7 @@ def julia_custom(w,h,c,zoom,cx,cy,iters,ciclos,mezcla,tam,brillo, palette, suave
     img = np.clip(img*brillo,0,255).astype(np.uint8)
     return img
 
-pal = np.array([hex_to_rgb(c) for c in st.session_state.colores], float)
+pal = np.array([hex_to_rgb(x) for x in [c1,c2,c3,c4,c5,c6]], float)
 W=1200; H=900
 img=julia_custom(W,H,c,zoom,center_x,center_y,iteraciones,ciclos,mezcla,tamano_mancha,brillo,pal,suavizado_gama)
 st.image(img,use_container_width=True,channels="RGB")
@@ -110,4 +98,4 @@ st.image(img,use_container_width=True,channels="RGB")
 img_hi=julia_custom(resolucion,resolucion,c,zoom,center_x,center_y,iteraciones,ciclos,mezcla,tamano_mancha,brillo,pal,suavizado_gama)
 buf=io.BytesIO()
 Image.fromarray(img_hi).save(buf,format="PNG")
-st.sidebar.download_button("📥 Descargar PNG 4K",buf.getvalue(),file_name=f"fractal_V77_DIA{dia}.png",mime="image/png", type="primary")
+st.sidebar.download_button("📥 Descargar PNG 4K",buf.getvalue(),file_name=f"fractal_V78_{paleta_nombre}_DIA{dia}.png",mime="image/png", type="primary")
