@@ -3,7 +3,7 @@ import numpy as np
 from PIL import Image, ImageDraw
 import io, math
 
-st.set_page_config(layout="wide", page_title="V92")
+st.set_page_config(layout="wide", page_title="V94")
 
 def hex_to_rgb(h):
     h = h.lstrip('#')
@@ -34,19 +34,19 @@ PALETAS = {
 
 FRACTALES = {
     "DENDRITE": {"c": complex(-0.745, 0.11), "formula": "Zn+1=Zn2+C"},
-    "RABBIT": {"c": complex(-0.123, 0.745), "formula": "Zn+1=Zn2+C - Conejo"},
-    "SPIRAL": {"c": complex(-0.77568377, 0.13646737), "formula": "Zn+1=Zn2+C - Espiral"},
-    "SIEGEL DISK": {"c": complex(-0.391, -0.587), "formula": "Zn+1=Zn2+C - Siegel"},
+    "RABBIT": {"c": complex(-0.123, 0.745), "formula": "Zn+1=Zn2+C"},
+    "SPIRAL": {"c": complex(-0.77568377, 0.13646737), "formula": "Zn+1=Zn2+C"},
+    "SIEGEL DISK": {"c": complex(-0.391, -0.587), "formula": "Zn+1=Zn2+C"},
     "BURNING SHIP JULIA": {"c": complex(-0.5, -0.5), "formula": "Zn+1=(|Re|+i|Im|)2+C"},
-    "FEATHER": {"c": complex(-0.8, 0.156), "formula": "Zn+1=Zn2+C - Pluma"},
-    "MANDELBROT": {"c": complex(0,0), "formula": "Zn+1=Zn2+C - Mandelbrot"},
-    "TRICORN": {"c": complex(0,0), "formula": "Zn+1=conj(Zn)2+C - Tricorn"},
-    "NEWTON": {"c": complex(0,0), "formula": "Zn+1=Zn-(Zn3-1)/3Zn2 - Newton"},
+    "FEATHER": {"c": complex(-0.8, 0.156), "formula": "Zn+1=Zn2+C"},
+    "MANDELBROT": {"c": complex(0,0), "formula": "Zn+1=Zn2+C"},
+    "TRICORN": {"c": complex(0,0), "formula": "Zn+1=conj(Zn)2+C"},
+    "NEWTON": {"c": complex(0,0), "formula": "Zn+1=Zn-(Zn3-1)/3Zn2"},
 }
 
 with st.sidebar:
     nombre_cliente = st.text_input("Nombre del cliente / proyecto", "ROBERTO ZERTUCHE")
-    firma = st.text_input("Firma", "© 2026")
+    codigos = st.text_input("Códigos", "49/316/267")
     st.divider()
     tipo_fractal = st.selectbox("TIPO DE FRACTAL", list(FRACTALES.keys()), index=0)
     dia = st.slider("DIA", 1, 365, 283)
@@ -54,12 +54,8 @@ with st.sidebar:
     paleta_nombre = st.selectbox("PALETA", list(PALETAS.keys()), index=0)
     base = PALETAS[paleta_nombre]
     st.write("**EDITA 6 COLORES**")
-    c1 = st.color_picker("C1", base[0])
-    c2 = st.color_picker("C2", base[1])
-    c3 = st.color_picker("C3", base[2])
-    c4 = st.color_picker("C4", base[3])
-    c5 = st.color_picker("C5", base[4])
-    c6 = st.color_picker("C6", base[5])
+    c1 = st.color_picker("C1", base[0]); c2 = st.color_picker("C2", base[1]); c3 = st.color_picker("C3", base[2])
+    c4 = st.color_picker("C4", base[3]); c5 = st.color_picker("C5", base[4]); c6 = st.color_picker("C6", base[5])
     colores_actuales = [c1,c2,c3,c4,c5,c6]
     st.write("---")
     tam = st.slider("Tamano mancha", 0.1, 3.0, 1.8)
@@ -74,12 +70,7 @@ st.title(f"{nombre_cliente}")
 t = dia/365*2*math.pi
 base_c = FRACTALES[tipo_fractal]["c"]
 es_fijo = tipo_fractal in ("MANDELBROT", "TRICORN", "NEWTON")
-if es_fijo:
-    cx = base_c.real
-    cy = base_c.imag
-else:
-    cx = base_c.real + 0.005*math.cos(t*3)
-    cy = base_c.imag + 0.005*math.sin(t*3)
+cx, cy = (base_c.real, base_c.imag) if es_fijo else (base_c.real + 0.005*math.cos(t*3), base_c.imag + 0.005*math.sin(t*3))
 c_var = complex(cx, cy)
 
 x = np.linspace(-1.5/zoom, 1.5/zoom, 1000)
@@ -87,12 +78,10 @@ y = np.linspace(-1.0/zoom, 1.0/zoom, 800)
 X,Y = np.meshgrid(x,y)
 
 if tipo_fractal == "MANDELBROT":
-    C = (X-0.5) + 1j*Y
-    Z = np.zeros_like(C)
+    C = (X-0.5) + 1j*Y; Z = np.zeros_like(C)
     for _ in range(80): Z = Z*Z + C
 elif tipo_fractal == "TRICORN":
-    C = (X-0.5) + 1j*Y
-    Z = np.zeros_like(C)
+    C = (X-0.5) + 1j*Y; Z = np.zeros_like(C)
     for _ in range(80): Z = np.conj(Z)**2 + C
 elif tipo_fractal == "NEWTON":
     Z = X + 1j*Y
@@ -107,17 +96,11 @@ else:
     else:
         for _ in range(80): Z = Z*Z + c_var
 
-if tipo_fractal == "NEWTON":
-    s = (np.angle(Z) + np.pi) / (2*np.pi)
-else:
-    fase = np.angle(Z)*0.22 + np.log(np.abs(Z)+1)*tam
-    s = (fase*0.375) % 1.0
+s = (np.angle(Z) + np.pi) / (2*np.pi) if tipo_fractal=="NEWTON" else (np.angle(Z)*0.22 + np.log(np.abs(Z)+1)*tam)*0.375 % 1.0
 
 palette = np.array([hex_to_rgb(c) for c in colores_actuales], float)
-pos = s*6.0
-i0 = np.floor(pos).astype(int) % 6
-f = pos - np.floor(pos)
-f = 0.5*(1-np.cos(f*np.pi))
+pos = s*6.0; i0 = np.floor(pos).astype(int) % 6
+f = pos - np.floor(pos); f = 0.5*(1-np.cos(f*np.pi))
 out = np.zeros((800,1000,3), float)
 for k in range(6):
     m = i0==k; nk = (k+1)%6
@@ -126,8 +109,7 @@ for k in range(6):
     out[m,2] = (1-f[m])*palette[k,2] + f[m]*palette[nk,2]
 out = np.clip(out*brillo,0,255).astype(np.uint8)
 
-magnitud = np.abs(Z)
-brillo_pixel = out.mean(axis=2)
+magnitud = np.abs(Z); brillo_pixel = out.mean(axis=2)
 if fondo_transparente:
     alpha = np.where(brillo_pixel > (10 + umbral*10), 255, 0).astype(np.uint8) if tipo_fractal=="NEWTON" else np.where((magnitud < 4) & (brillo_pixel > (10 + umbral*10)), 255, 0).astype(np.uint8)
     img_base = Image.fromarray(np.dstack((out, alpha)), "RGBA")
@@ -136,23 +118,21 @@ else:
 
 formula_txt = FRACTALES[tipo_fractal]["formula"]
 
-# TEXTO LIMPIO SIN DIA Y SIN PALETA
-texto_linea1 = f"{nombre_cliente} | {tipo_fractal} | C={cx:.4f}+{cy:.4f}i"
-texto_linea2 = f"{formula_txt}"
+# ORDEN NUEVO QUE PEDISTE
+# Linea 1: Nombre y Codigos
+# Linea 2: Tipo, variable c, y formula
+if codigos.strip()!= "":
+    texto_linea1 = f"{nombre_cliente} | {codigos}"
+else:
+    texto_linea1 = f"{nombre_cliente}"
+texto_linea2 = f"{tipo_fractal} | C={cx:.4f}+{cy:.4f}i | {formula_txt}"
 
 if incluir_etiqueta_en_imagen:
-    W,H = img_base.size
-    etiqueta_h = 52
-    # Fondo blanco/transparente
-    if fondo_transparente:
-        nueva = Image.new("RGBA", (W, H+etiqueta_h), (255,255,255,0))
-        fondo_etiqueta = (255,255,255,230)
-    else:
-        nueva = Image.new("RGBA", (W, H+etiqueta_h), (255,255,255,255))
-        fondo_etiqueta = (255,255,255,255)
+    W,H = img_base.size; etiqueta_h = 52
+    fondo_etiqueta = (255,255,255,230) if fondo_transparente else (255,255,255,255)
+    nueva = Image.new("RGBA", (W, H+etiqueta_h), (255,255,255,0) if fondo_transparente else (255,255,255,255))
     nueva.paste(img_base, (0,0))
     draw = ImageDraw.Draw(nueva)
-    # Fondo blanco sin franja de color
     draw.rectangle([(0,H),(W,H+etiqueta_h)], fill=fondo_etiqueta)
     draw.text((14, H+6), texto_linea1, fill=(0,0,0,255))
     draw.text((14, H+28), texto_linea2, fill=(0,0,0,255))
@@ -162,7 +142,6 @@ else:
 
 st.image(img_final, use_container_width=True)
 
-# FRANJA FINAL IGUAL A LA DE ARRIBA - BLANCO CON TEXTO NEGRO - SIN FRANJA LATERAL
 st.markdown(f"""
 <div style="background:white; padding:12px 14px; border-radius:8px; border:1px solid #DDD;">
 <b style="color:black; font-size:16px;">{texto_linea1}</b><br>
@@ -170,6 +149,5 @@ st.markdown(f"""
 </div>
 """, unsafe_allow_html=True)
 
-buf = io.BytesIO()
-img_final.save(buf, format="PNG")
+buf = io.BytesIO(); img_final.save(buf, format="PNG")
 st.sidebar.download_button("📥 Descargar PNG", buf.getvalue(), f"{nombre_cliente.replace(' ','_')}_{tipo_fractal}.png", "image/png", type="primary")
