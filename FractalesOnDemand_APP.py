@@ -1,9 +1,9 @@
 import streamlit as st
 import numpy as np
-from PIL import Image, ImageDraw
+from PIL import Image, ImageDraw, ImageFont
 import io, math
 
-st.set_page_config(layout="wide", page_title="V94")
+st.set_page_config(layout="wide", page_title="V95")
 
 def hex_to_rgb(h):
     h = h.lstrip('#')
@@ -118,34 +118,54 @@ else:
 
 formula_txt = FRACTALES[tipo_fractal]["formula"]
 
-# ORDEN NUEVO QUE PEDISTE
-# Linea 1: Nombre y Codigos
-# Linea 2: Tipo, variable c, y formula
+# ORDEN QUE PEDISTE
 if codigos.strip()!= "":
     texto_linea1 = f"{nombre_cliente} | {codigos}"
 else:
     texto_linea1 = f"{nombre_cliente}"
 texto_linea2 = f"{tipo_fractal} | C={cx:.4f}+{cy:.4f}i | {formula_txt}"
 
+# --- ETIQUETA INTEGRADA AL FONDO ---
 if incluir_etiqueta_en_imagen:
-    W,H = img_base.size; etiqueta_h = 52
-    fondo_etiqueta = (255,255,255,230) if fondo_transparente else (255,255,255,255)
-    nueva = Image.new("RGBA", (W, H+etiqueta_h), (255,255,255,0) if fondo_transparente else (255,255,255,255))
-    nueva.paste(img_base, (0,0))
-    draw = ImageDraw.Draw(nueva)
-    draw.rectangle([(0,H),(W,H+etiqueta_h)], fill=fondo_etiqueta)
-    draw.text((14, H+6), texto_linea1, fill=(0,0,0,255))
-    draw.text((14, H+28), texto_linea2, fill=(0,0,0,255))
-    img_final = nueva
+    img_final = img_base.copy()
+    W,H = img_final.size
+    draw = ImageDraw.Draw(img_final)
+
+    # Detecta si el fondo abajo es oscuro o claro para elegir color de texto
+    # Tomamos el promedio de brillo de la franja inferior
+    muestra_inf = out[H-80:H, :].mean() if H>=80 else out.mean()
+    es_oscuro = muestra_inf < 90 # si es oscuro, texto blanco
+
+    if es_oscuro:
+        color_texto = (255,255,255,255)
+        color_sombra = (0,0,0,180)
+    else:
+        color_texto = (0,0,0,255)
+        color_sombra = (255,255,255,180)
+
+    # Sombra para legibilidad + texto
+    x0, y1, y2 = 20, H-48, H-26
+    # sombra
+    draw.text((x0+1, y1+1), texto_linea1, fill=color_sombra)
+    draw.text((x0+1, y2+1), texto_linea2, fill=color_sombra)
+    # texto principal
+    draw.text((x0, y1), texto_linea1, fill=color_texto)
+    draw.text((x0, y2), texto_linea2, fill=color_texto)
 else:
     img_final = img_base
 
 st.image(img_final, use_container_width=True)
 
+# Franja de abajo repite lo mismo, también con fondo oscuro/claro
+muestra_inf = out[-80:,:].mean()
+es_oscuro_web = muestra_inf < 90
+bg_web = "#111" if es_oscuro_web else "white"
+col_web = "white" if es_oscuro_web else "black"
+
 st.markdown(f"""
-<div style="background:white; padding:12px 14px; border-radius:8px; border:1px solid #DDD;">
-<b style="color:black; font-size:16px;">{texto_linea1}</b><br>
-<span style="color:black; font-family:monospace; font-size:13px;">{texto_linea2}</span>
+<div style="background:{bg_web}; padding:12px 14px; border-radius:8px; border:1px solid #DDD;">
+<b style="color:{col_web}; font-size:16px;">{texto_linea1}</b><br>
+<span style="color:{col_web}; font-family:monospace; font-size:13px;">{texto_linea2}</span>
 </div>
 """, unsafe_allow_html=True)
 
