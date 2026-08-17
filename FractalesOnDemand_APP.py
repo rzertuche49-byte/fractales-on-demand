@@ -274,4 +274,3 @@ if st.button("Generar Animacion", key="gen_anim"):
 
     # Limpiar
     del frames; gc.collect()
-    
