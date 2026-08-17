@@ -1,51 +1,94 @@
 import streamlit as st
 import numpy as np
 from PIL import Image, ImageDraw, ImageFont
-import io, math
+import io, math, os
 
-st.set_page_config(layout="wide", page_title="Fractales On Demand V100.2 ETIQUETA LEGIBLE 8K")
+st.set_page_config(layout="wide", page_title="Fractales On Demand V100.3 FIX 8K")
 
 def hex_to_rgb(h):
     h=h.lstrip('#')
     return [int(h[0:2],16), int(h[2:4],16), int(h[4:6],16)]
 
 def get_font_bold(size):
+    # RUTAS DONDE SI EXISTE LA FUENTE EN STREAMLIT CLOUD
+    posibles = [
+        "DejaVuSans-Bold.ttf",
+        "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf",
+        "/usr/share/fonts/TTF/DejaVuSans-Bold.ttf",
+        "/usr/share/fonts/dejavu/DejaVuSans-Bold.ttf",
+        "DejaVuSans.ttf",
+        "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf"
+    ]
+    for p in posibles:
+        if os.path.exists(p):
+            try: return ImageFont.truetype(p, size)
+            except: continue
+    # ultimo intento con tamaño real
     try: return ImageFont.truetype("DejaVuSans-Bold.ttf", size)
     except: return ImageFont.load_default()
+
 def get_font_mono(size):
+    posibles = [
+        "DejaVuSansMono-Bold.ttf",
+        "/usr/share/fonts/truetype/dejavu/DejaVuSansMono-Bold.ttf",
+        "/usr/share/fonts/truetype/dejavu/DejaVuSansMono.ttf",
+        "/usr/share/fonts/TTF/DejaVuSansMono-Bold.ttf",
+        "DejaVuSansMono.ttf"
+    ]
+    for p in posibles:
+        if os.path.exists(p):
+            try: return ImageFont.truetype(p, size)
+            except: continue
     try: return ImageFont.truetype("DejaVuSansMono-Bold.ttf", size)
     except: return ImageFont.load_default()
 
-# PROPORCION FIJA PARA TODAS LAS RESOLUCIONES - CORREGIDO 8K
+# FIX: FUENTE QUE SI ESCALA EN 8K + PROPORCION FIJA 20%
 def crear_imagen_con_etiqueta_abajo(img_base, texto1, texto2, escala=1.0):
     W,H = img_base.size
-    # 18% del alto fractal para que se lea en 8K, antes 13.5% era muy chico en 8K
-    label_h = int(H * 0.18)
+    # 20% del alto - FIJO para todas las resoluciones
+    label_h = int(H * 0.20)
     nueva_h = H + label_h
-    nueva = Image.new("RGBA", (W, nueva_h), (255,255,255,255))
-    nueva.paste(img_base, (0,0), img_base if img_base.mode=="RGBA" else None)
-    draw = ImageDraw.Draw(nueva)
-    draw.rectangle([0,H,W,nueva_h], fill=(255,255,255,255))
-    draw.line([0,H,W,H], fill=(220,220,220), width=max(1,int(2*escala)))
+    nueva = Image.new("RGB", (W, nueva_h), (255,255,255))
+    # pegar fractal
+    if img_base.mode == "RGBA":
+        # fondo negro si era transparente, para que se vea bien
+        fondo = Image.new("RGB", (W,H), (0,0,0))
+        fondo.paste(img_base, mask=img_base.split()[3] if len(img_base.split())>3 else None)
+        # si fondo no era transparente, usamos el original
+        try:
+            check = np.array(img_base)
+            if check.shape[2]==4:
+                # usar img_base con fondo original si tenia color
+                pass
+            nueva.paste(img_base, (0,0), img_base if img_base.mode=="RGBA" else None)
+        except:
+            nueva.paste(img_base, (0,0))
+    else:
+        nueva.paste(img_base, (0,0))
 
-    # FUENTE ESCALADA AL ANCHO - ANTES ERA 28*escala, AHORA W*0.032 para que en 8K sea grande
-    font_size_1 = max(int(W * 0.032), int(28*escala)) # 3.2% del ancho
-    font_size_2 = max(int(W * 0.020), int(19*escala)) # 2.0% del ancho
+    # asegurar area blanca abajo
+    draw = ImageDraw.Draw(nueva)
+    draw.rectangle([0,H,W,nueva_h], fill=(255,255,255))
+    draw.line([0,H,W,H], fill=(200,200,200), width=2)
+
+    # ESCALA REAL BASADA EN ANCHO - 7680 = 245px y 122px
+    font_size_1 = int(W * 0.038) # 3.8% ancho -> 1000=38px, 7680=291px
+    font_size_2 = int(W * 0.022) # 2.2% ancho -> 1000=22px, 7680=168px
 
     font1 = get_font_bold(font_size_1)
     font2 = get_font_mono(font_size_2)
 
-    pad_x = int(W * 0.018) # 1.8% del ancho
-    pad_y1 = int(label_h * 0.18) # 18% del alto de la etiqueta
-    pad_y2 = int(label_h * 0.12) # 12% entre lineas
+    pad_x = int(W * 0.02)
+    pad_y1 = int(label_h * 0.20)
+    pad_y2 = int(label_h * 0.10)
 
-    draw.text((pad_x, H+pad_y1), texto1, fill=(0,0,0,255), font=font1)
+    draw.text((pad_x, H+pad_y1), texto1, fill=(0,0,0), font=font1)
     try:
         bbox1 = draw.textbbox((0,0), texto1, font=font1)
         h1 = bbox1[3]-bbox1[1]
     except:
-        h1 = int(font_size_1*1.1)
-    draw.text((pad_x, H+pad_y1+h1+pad_y2), texto2, fill=(15,15,15,255), font=font2)
+        h1 = font_size_1
+    draw.text((pad_x, H+pad_y1+h1+pad_y2), texto2, fill=(0,0,0), font=font2)
     return nueva
 
 def render_block(W_chunk, H_chunk, X, Y, c_var, tipo, iter_base=60):
@@ -114,7 +157,7 @@ def render_fractal_true(W, H, zoom, c_var, tipo_fractal, colores_rgb, tam, brill
     ys = np.linspace(-1.0/zoom, 1.0/zoom, H)
     xs = np.linspace(-1.5/zoom, 1.5/zoom, W)
     palette = np.array(colores_rgb, float)
-    CHUNK = 320
+    CHUNK = 256
     for y0 in range(0, H, CHUNK):
         y1 = min(y0+CHUNK, H)
         y_chunk = ys[y0:y1]
@@ -149,25 +192,7 @@ def render_fractal_true(W, H, zoom, c_var, tipo_fractal, colores_rgb, tam, brill
 
 PALETAS = {
     "Tu captura": ["#00FFFF","#0064FF","#FF00C8","#FF6400","#FFFF00","#00FF64"],
-    "Neon 80s": ["#00FFFF","#FF00FF","#FFFF00","#00FF00","#FF0066","#6600FF"],
     "Fuego": ["#FF0000","#FF6600","#FFCC00","#FF3300","#CC0000","#FF9900"],
-    "Oceano Profundo": ["#001F54","#034078","#1282A2","#00B4D8","#90E0EF","#CAF0F8"],
-    "Pastel Dream": ["#FFB5E8","#B5DEFF","#C3FF99","#FFF5BA","#FFC9DE","#D1BDFF"],
-    "Sunset": ["#F72585","#7209B7","#3A0CA3","#4361EE","#4CC9F0","#FFBE0B"],
-    "Galaxy": ["#0B0C10","#1F2833","#45A29E","#66FCF1","#C5C6C7","#9D00FF"],
-    "Toxic": ["#00FF00","#CCFF00","#00FFCC","#FFFF00","#FF00FF","#00FFFF"],
-    "Candy": ["#FF70A6","#FF9770","#FFD670","#E9FF70","#70FFB2","#70D6FF"],
-    "Bosque": ["#0A2F0A","#1B5E20","#2E7D32","#66BB6A","#A5D6A7","#C8E6C9"],
-    "Volcan": ["#000000","#4A0000","#8B0000","#FF4500","#FF8C00","#FFD700"],
-    "Aurora": ["#03045E","#0077B6","#00B4D8","#90E0EF","#ADE8F4","#CAF0F8"],
-    "Miami Vice": ["#FF6BEC","#3EFFE2","#FFD93D","#FF6B6B","#6BCB77","#4D96FF"],
-    "Cyberpunk": ["#FF003C","#00F0FF","#F0FF00","#FF00F0","#00FF9F","#7000FF"],
-    "Helado": ["#FEC8D8","#FFDFD3","#FFF0B5","#D0F4DE","#A9DEF9","#E4C1F9"],
-    "Matrix": ["#000000","#003B00","#008F11","#00FF41","#00FF00","#AAFF00"],
-    "Desierto": ["#7F5539","#9C6644","#B08968","#DDB892","#E6CCB2","#EDE0D4"],
-    "Joker": ["#3D087B","#5A189A","#7B2CBF","#9D4EDD","#C77DFF","#00F5D4"],
-    "Psicodelico": ["#FF00FF","#00FFFF","#FFFF00","#FF0000","#00FF00","#0000FF"],
-    "Elegante": ["#000000","#1A1A1A","#D4AF37","#F5F5DC","#8B7355","#FFFFFF"],
 }
 FRACTALES = {
     "RABBIT": {"c": complex(-0.123, 0.745), "formula": "Zn+1=Zn2+C"},
@@ -201,7 +226,7 @@ with st.sidebar:
     tipo_fractal = st.selectbox("TIPO DE FRACTAL (21)", list(FRACTALES.keys()), 7)
     dia = st.slider("DIA", 1, 365, 49)
     zoom = st.slider("ZOOM", 0.2, 5.0, 1.0)
-    paleta_nombre = st.selectbox("PALETA", list(PALETAS.keys()), 2)
+    paleta_nombre = st.selectbox("PALETA", list(PALETAS.keys()), 0)
     base = PALETAS[paleta_nombre]
     st.write("**EDITA 6 COLORES**")
     c1=st.color_picker("C1", base[0], key=f"c1_{paleta_nombre}")
@@ -295,10 +320,9 @@ with st.sidebar:
             st.download_button("⬇️ PNG 8K REAL con etiqueta LEGIBLE", buf.getvalue(), f"{nombre_cliente}_8K_REAL_{fondo_mode}_ETIQUETA.png", "image/png", key="png_8k_real")
             buf2=io.BytesIO(); img_e.convert("RGB").save(buf2, format="PDF", resolution=300.0)
             st.download_button("⬇️ PDF 8K REAL 300dpi con etiqueta LEGIBLE", buf2.getvalue(), f"{nombre_cliente}_8K_REAL_{fondo_mode}_ETIQUETA.pdf", "application/pdf", key="pdf_8k_real")
-            st.success(f"Etiqueta 18% alto - Fuente {int(7680*0.032)}px en 8K, legible")
+            st.success("Ahora si: 20% etiqueta, 291px titulo en 8K")
     else:
         for Wc,Hc,label in [(3840,3072,"4K"), (7680,6144,"8K")]:
             img_e=render_fractal_true(Wc,Hc, zoom, c_var, tipo_fractal, colores_rgb, tam, brillo, fondo_mode, bg_rgb, umbral, texto1, texto2, presentar_etiqueta)
             buf=io.BytesIO(); img_e.save(buf, format="PNG")
             st.download_button(f"PNG {label} con etiqueta abajo", buf.getvalue(), f"{nombre_cliente}_{label}_{fondo_mode}_ETIQUETA.png", "image/png", key=f"png_{label}_{fondo_mode}")
-            
